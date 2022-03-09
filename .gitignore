@@ -1,0 +1,12 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Conver
+Convergence_diagnostics/
+Data/
+Manuscript/
+Other/
+RDS_files/
+References/
+
