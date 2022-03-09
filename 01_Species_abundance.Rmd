@@ -1,0 +1,261 @@
+---
+title: "01_Vegetation_cover"
+author: "Annegreet Veeken"
+date: "24-11-2021"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+# load libraries
+library(tidyverse)
+library(readxl)
+library(Taxonstand)
+```
+
+## To do
+
+## QGIS
+
+Import Scotland land cover HLCM2020_SCOTLAND_TIFF
+
+-   Set layer style with .qml Import field site coordinate
+
+-   Reproject to british national grid
+
+Split vector layer based on Zone
+
+-   Zone_A\_coordinates.shp = zone A coordinates
+
+-   Zone_B\_coordinate.shp = zone B veg plot coordinates
+
+Create buffer zone of 100 m and 1000 m
+
+-   Zone_B\_buffer.shp
+
+-   Zone_C\_buffer.shp
+
+Use Zone histogram to compute pixels in zone attributed to certain land
+cover type Export as Veg_cover_zoneC.csv and Veg_cover_zoneB.csv
+
+Use Sample raster values to compute landcover types for vegetation
+plots. Export as Veg_type_zoneB_sites.csv and Veg_type_zoneA_sites.csv
+
+## Prepare data
+Vegetation cover data.
+```{r load and prepare veg cover data}
+# load data
+zone_b <- read.csv("Data/Veg_cover_zoneB.csv")
+zone_c <- read.csv("Data/Veg_cover_zoneC.csv")
+
+# EUNIS land cover classifications
+veg_type_labels <- c(HISTO_1 = "C1: Water",
+                     HISTO_2 = "D1: Raised and blanket bogs",
+                     HISTO_3 = "D2: Valley mires, poor fens and transition mires",
+                     HISTO_4 = "D4: Base-rich fens and calcareous spring mires", 
+                     HISTO_5 = "E1: Dry grasslands",
+                     HISTO_6 = "E2: Mesic grasslands",
+                     HISTO_7 = "E3: Seasonally wet and wet grasslands",
+                     HISTO_8 = "E4: Alpine and subalpine grasslands",
+                     HISTO_9 = "E5: Woodland fringes and clearings and tall forb stands",
+                     HISTO_10 = "F2: Arctic, alpine and subalpine scrub",
+                     HISTO_11 = "F3: Temperate and mediterranean-montane scrub",
+                     HISTO_12 = "F4: Temperate shrub heathland",
+                     HISTO_13 = "F9: Riverine and fen scrubs",
+                     HISTO_14 = "G1: Broadleaved deciduous woodland",
+                     HISTO_15 = "G3: Coniferous woodland",
+                     HISTO_16 = "G4: Mixed deciduous and coniferous woodland",
+                     HISTO_17 = "G5: Line of trees, amall anthropogenic woodlands, recently felled woodland, early-stage woodland and coppice",
+                     HISTO_18 = "H2: Screes",
+                     HISTO_19 = "Inland cliffs, rock pavements and outcrops",
+                     HISTO_20 = "I1: Arable land and market gardens",
+                     HISTO_21 = "J: Builtup (and Bare before post)",
+                     HISTO_23 = "O: Bare (after post)")
+
+# make data tidy
+zone_b <- zone_b %>% 
+  select(sitename = name, lat, lon, contains("HISTO")) %>% 
+  pivot_longer(cols = contains("HISTO"), names_to = "veg_type") %>% 
+  # rename veg_types
+  mutate(veg_type = recode(veg_type, !!!veg_type_labels),
+  # rename sitenames       
+         sitename = str_remove(sitename, "-A")) %>% 
+  # filter land cover type that are not vegation
+  filter(!veg_type %in% c("C1: Water", 
+                         "J: Builtup (and Bare before post)",
+                         "O: Bare (after post)")) %>% 
+  # calculate veg_type percentage
+  group_by(sitename) %>% 
+  # calculate percentages
+  mutate(veg_cov_b = value/sum(value)) %>%
+  group_by(sitename, veg_type) %>%
+  summarise(veg_cov_b = sum(veg_cov_b, na.rm = TRUE)) 
+
+# make data tidy
+zone_c <- zone_c %>% 
+  select(sitename = name, lat, lon, contains("HISTO")) %>% 
+  pivot_longer(cols = contains("HISTO"), names_to = "veg_type") %>% 
+  # rename veg_types
+  mutate(veg_type = recode(veg_type, !!!veg_type_labels),
+  # rename sitenames       
+         sitename = str_remove(sitename, "-A")) %>% 
+  # filter land cover type that are not vegation
+  filter(!veg_type %in% c("C1: Water", 
+                         "J: Builtup (and Bare before post)",
+                         "O: Bare (after post)")) %>% 
+  # calculate veg_type percentage
+  group_by(sitename) %>% 
+  # calculate percentages
+  mutate(veg_cov_c = value/sum(value)) %>%
+  group_by(sitename, veg_type) %>%
+  summarise(veg_cov_c = sum(veg_cov_c, na.rm = TRUE)) 
+
+veg_type <- left_join(zone_b, zone_c, by = c("sitename", "veg_type")) 
+```
+
+```{r load and prepare vegetation data}
+# Load in vegetation type data for the plots
+zone_b_site <- read.csv("Data/20220106-Veg_type_zoneB_sites.csv")
+
+# Make tidy
+zone_b_site <- zone_b_site %>% 
+  # create seperate site and plot column
+  separate(name, c("sitename", "plot")) %>% 
+  # recode veg_type
+  mutate(veg_type = as.factor(rvalue_1)) %>% 
+  select(sitename, plot, lat, lon, veg_type) %>% 
+  mutate(veg_type = recode(veg_type, 
+                           "1" = "C1: Water",
+                           "2" = "D1: Raised and blanket bogs",
+                           "3" = "D2: Valley mires, poor fens and transition mires",
+                           "4" = "D4: Base-rich fens and calcareous spring mires", 
+                           "5" = "E1: Dry grasslands",
+                           "6" = "E2: Mesic grasslands",
+                           "7" = "E3: Seasonally wet and wet grasslands",
+                           "8" = "E4: Alpine and subalpine grasslands",
+                           "9" = "E5: Woodland fringes and clearings and tall forb stands",
+                           "10"= "F2: Arctic, alpine and subalpine scrub",
+                           "11" = "F3: Temperate and mediterranean-montane scrub",
+                           "12"= "F4: Temperate shrub heathland",
+                           "13" = "F9: Riverine and fen scrubs",
+                           "14"= "G1: Broadleaved deciduous woodland",
+                           "15" = "G3: Coniferous woodland",
+                           "16" = "G4: Mixed deciduous and coniferous woodland",
+                           "17" = "G5: Line of trees, amall anthropogenic woodlands, recently felled woodland, early-stage woodland and coppice",
+                           "18" = "H2: Screes",
+                           "19" = "Inland cliffs, rock pavements and outcrops",
+                           "20" = "I1: Arable land and market gardens",
+                           "21" = "J: Builtup (and Bare before post)",
+                           "23" = "O: Bare (after post)"))
+
+# load in vegetation data
+spec_b_raw <- read_xlsx("Data/species_zone_B.xlsx")
+
+# make tidy
+spec_b <- spec_b_raw %>% 
+  pivot_longer(contains("plot"), names_to = "plot", values_to = "abun",
+               values_drop_na = TRUE) %>% 
+  mutate(plot = str_remove(plot, "plot_ ")) %>% 
+  select(sitename = Site, plot, species = Species, abun) %>% 
+  # join with vegetation type data
+  left_join(zone_b_site, by = c("sitename", "plot"))
+```
+
+## Zone B & C
+
+```{r calculate vegetation cover}
+veg_cover_bc <- spec_b %>% 
+  # remove moss
+  filter(!species %in% c("Moss", "Sphagnum", "Polytrichum commune",
+                         "Sphagnum squarrosum")) %>% 
+  # calculate avarage species cover per vegetation type using the plots belonging to that vegetation type
+  group_by(sitename, veg_type, species) %>% 
+  summarise(abun = mean(abun)) %>% 
+  # join with vegetation cover data
+  full_join(veg_type, by = c("sitename", "veg_type")) %>% 
+  # weight species abundance by veg cover
+  mutate(spec_abun_b = abun*veg_cov_b, spec_abun_c = abun*veg_cov_c) %>% 
+  # drop unneeded columns
+  select(sitename, veg_type, species, veg_cov_b, veg_cov_c, spec_abun_b,
+         spec_abun_c)
+
+# print table with missing species data for vegetation types
+missing_vegtype <- veg_cover_bc %>% 
+  filter(is.na(species)) %>% 
+  group_by(sitename, veg_type) %>% 
+  summarise(cov_b = round(sum(veg_cov_b), 2), cov_c = round(sum(veg_cov_c), 2)) %>%
+  filter(!cov_b == 0|!cov_c == 0) 
+
+# for missing data, use species data from other plots
+missing <- spec_b %>% 
+  # remove moss
+  filter(!species %in% c("Moss", "Sphagnum", "Polytrichum commune",
+                         "Sphagnum squarrosum")) %>% 
+  filter(veg_type %in% missing_vegtype$veg_type) %>% 
+  group_by(veg_type, species) %>% 
+  summarise(abun = mean(abun))
+
+veg_cover_bc_na <- veg_cover_bc %>% 
+  filter(is.na(species)) %>%
+  select(-species) %>% 
+  left_join(missing, by = "veg_type") %>% 
+  mutate(spec_abun_b = abun*veg_cov_b, spec_abun_c = abun*veg_cov_c) %>% 
+  select(sitename, veg_type, species, veg_cov_b, veg_cov_c, spec_abun_b,
+         spec_abun_c)
+
+veg_cover_bc <-  veg_cover_bc %>% 
+  filter(!is.na(species)) %>% 
+  bind_rows(., veg_cover_bc_na) %>% 
+  arrange(sitename, veg_type, species)
+```
+
+## Zone A
+
+```{r}
+# load data
+spec_a_raw <- read_xlsx("Data/Species_zone_A.xlsx", skip = 1)
+
+# Make tidy
+spec_a <- spec_a_raw %>% 
+  pivot_longer(3:19, names_to = "plot", values_to = "abun") %>% 
+  rename(sitename = Site, species = Species) %>% 
+  # remove moss
+  filter(!species %in% c("Moss", "Sphagnum", "Polytrichum commune",
+                         "Sphagnum squarrosum")) %>% 
+  # create direction and distance column
+  mutate(direction = case_when(str_detect(plot, "N") ~ "North",
+                               str_detect(plot, "S") ~ "South",
+                               str_detect(plot, "E") ~ "East",
+                               str_detect(plot, "W") ~ "West",
+                               str_detect(plot, "NE") ~ "Northeast",
+                               str_detect(plot, "NW") ~ "Northwest",
+                               str_detect(plot, "SW") ~ "Southwest",
+                               str_detect(plot, "SE") ~ "Southeast",
+                               plot == "Center" ~ "Center"),
+         distance = case_when(plot %in% c("N...4", "E...5", "S...6","W...7") ~ 
+                                "1.5-3 meter",
+                              plot %in% c("N...8", "E...9", "S...10", "W...11")  ~ 
+                                "3-6 meter",
+                              plot %in% c("N...12","NE","SE","NW","SW", "E...14", "S...16", "W...18") ~ 
+                                "6-10 meter",
+                              plot == "Center" ~ "0 meter")) %>% 
+  # create unique id for plot in site
+  group_by(sitename, direction, distance) %>% 
+  mutate(plot = cur_group_id())  
+  
+```
+
+## Standardization species names
+```{r standardize species names}
+harm <- read_xlsx("Data/Harmonization_table_species_names.xlsx")
+
+spec_a <- spec_a %>% 
+  left_join(harm, by = "species")
+veg_cover_bc <- veg_cover_bc %>% 
+  left_join(harm, by = "species")
+
+saveRDS(veg_cover_bc, "RDS_files/01_Species_abundance_bc.rds")
+saveRDS(spec_a, "RDS_files/01_Species_abundance_a.rds")
+```
