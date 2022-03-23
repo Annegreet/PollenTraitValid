@@ -48,8 +48,8 @@ dfPOL <- dfPOL %>%
   group_by(sitename) %>% 
   mutate(adjustedcount = count*PPE) %>%
   # calculate percentages
-  mutate(adjustedpercent = adjustedcount/sum(adjustedcount),
-         percent = count/sum(count, na.rm = TRUE)) %>%
+  mutate(adjustedpercent = adjustedcount/sum(adjustedcount)*100,
+         percent = count/sum(count, na.rm = TRUE)*100) %>%
   group_by(sitename, pollentaxon) %>%
   summarise(adjustedpercent = sum(adjustedpercent, na.rm = TRUE),
             percent = sum(percent)) 
