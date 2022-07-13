@@ -6,22 +6,23 @@
 ##
 ## Author: Annegreet Veeken
 ##
-## Last modified: 08-02-2022
+## Last modified: 11-03-2022
 ## ---------------------------
 ##
 ## Notes:
-##   
+##   - make plots of traits per pollen taxa
+##   - check units of the trait data and the gapfilled data
 ##
 ## ---------------------------
 
 # Load libraries
 library(tidyverse)
 library(readxl)
-library(Taxonstand)
 
 ## Load data ----
 plantheight_raw <- read_xlsx("Data/Plant_height.xlsx")
 sla_ldmc_raw <- read_xlsx("Data/LDMC_SLA_dataset.xlsx")
+cn_raw <- read_xlsx("Data/CN_dataset_150.xlsx")
 harm <- read_xlsx("Data/Harmonization_table_species_names.xlsx")
 
 ## Plant height ----
@@ -71,7 +72,8 @@ ldmc <- sla_ldmc_raw %>%
   distinct(sitename, species, .keep_all = TRUE) %>%  # ldmc has one measurement per species per site
   # create measurement ID
   group_by(sitename, species) %>% 
-  mutate(measurementID = row_number()) %>% 
+  mutate(measurementID = row_number(),
+         LDMC = LDMC/1000) %>% # convert from mg/g to g/g 
   # sort
   arrange(sitename, species, measurementID) %>% 
   # merge with species harmonisation list
@@ -94,3 +96,42 @@ la <- sla_ldmc_raw %>%
 
 saveRDS(la, "RDS_files/01_LA.rds")
     
+## C ----
+# Create lookup table to correct abbreviated species names
+ab_lookup <- tibble(new.name = sla_ldmc_raw$Species) %>% 
+  distinct %>% 
+  separate(., new.name, into = c("genus", "spec"), sep = " ", remove = FALSE) %>% 
+  filter(!is.na(spec)) %>% 
+  mutate(spec = str_to_lower(spec)) %>% 
+  mutate(old.name = paste0(str_extract(genus,pattern = "[:alpha:]"), ".", spec)) %>% 
+  select(new.name, old.name)
+regex_pattern <- setNames(ab_lookup$new.name, paste0("\\b", ab_lookup$old.name, "\\b"))
+cn <- cn_raw %>% 
+  # correct names
+  mutate(Name = str_replace_all(Name, regex_pattern)) %>% 
+  # Harmonize column names
+  select(sitename = Site, species = Name,
+         N = `N%`, C = `C%`) %>% 
+  # create measurement ID
+  group_by(sitename, species) %>% 
+  mutate(measurementID = row_number()) %>% 
+  # sort
+  arrange(sitename, species, measurementID) %>% 
+  # merge with species harmonisation list
+  left_join(harm, by = "species") %>% 
+  select(-...1, -measurementID)
+saveRDS(cn, "RDS_files/01_CN.rds")
+
+# Plot 
+sample_size <- sla %>% 
+  group_by(pollentaxon) %>% 
+  summarise(n = n())
+p <- sla %>%
+  ggplot( aes(x=pollentaxon, y=SLA)) +
+  geom_violin(width=2.1, size=0.2, fill = "darkorchid") +
+  theme_bw() +
+  theme(legend.position="none") +
+  coord_flip() + # This switch X and Y axis and allows to get the horizontal version
+  xlab("") +
+  ylab("SLA (mm2/mg)")
+p
