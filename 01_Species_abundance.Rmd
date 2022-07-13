@@ -44,7 +44,9 @@ Use Sample raster values to compute landcover types for vegetation
 plots. Export as Veg_type_zoneB_sites.csv and Veg_type_zoneA_sites.csv
 
 ## Prepare data
+
 Vegetation cover data.
+
 ```{r load and prepare veg cover data}
 # load data
 zone_b <- read.csv("Data/Veg_cover_zoneB.csv")
@@ -248,8 +250,10 @@ spec_a <- spec_a_raw %>%
 ```
 
 ## Standardization species names
+
 ```{r standardize species names}
-harm <- read_xlsx("Data/Harmonization_table_species_names.xlsx")
+harm <- read_xlsx("Data/Harmonization_table_species_names.xlsx") %>% 
+  select(-1)
 
 spec_a <- spec_a %>% 
   left_join(harm, by = "species")
