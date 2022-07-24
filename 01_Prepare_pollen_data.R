@@ -29,8 +29,8 @@ set.seed(1)
 # Scotland ----
 pollen_raw <- read.csv("Data/Pollen_count.csv", skip = 1)
 ppe <- read_xlsx("Data/Githumbi_2022_RPP.xlsx")
-pollenmode <- readRDS("RDS_files/01_Pollination_mode.rds")
-  
+polmode <- readRDS("RDS_files/01_Pollination_mode.rds")
+
 # make tidy
 dfPOL <- pollen_raw %>% 
   # filter empty rows
@@ -73,6 +73,16 @@ dfPOL_nc <- dfPOL %>%
   group_by(sitename, pollentaxon) %>%
   summarise(percent = sum(percent)) 
 
+# make function to continue draw from rnorm till RPP is positive (otherwise negative percentages)
+norm_positive <- function(RPP, RPP_sd){
+  success <- FALSE
+  while(!success){
+    x <- rnorm(1, RPP, RPP_sd)
+    success <- x > 0
+    }
+  return(x)
+}
+
 n <- 100 # number of draws from RPP distribution
 dfPOL_cor <- dfPOL %>%
   # join with ppe data 
@@ -83,7 +93,7 @@ dfPOL_cor <- dfPOL %>%
   mutate(mean = count/RPP) %>%  
   # correction with random draw from RPP distribution
   rowwise() %>%
-  mutate(col_rnorm = list(setNames(count/rnorm(n, RPP, RPP_sd), paste0("draw", 1:n)))) %>%
+  mutate(col_rnorm = list(setNames(count/replicate(n,norm_positive(RPP, RPP_sd)), paste0("draw",1:n)))) %>%
   unnest_wider(col_rnorm) %>% 
   # calculate percentages
   group_by(sitename) %>% 
@@ -95,7 +105,7 @@ dfPOL_cor <- dfPOL %>%
 dfPOL <- dfPOL_nc %>% 
   left_join(dfPOL_cor, by = c("sitename", "pollentaxon")) %>% 
   # add PFT and pollination mode
-  left_join(pollenmode, by = "pollentaxon") %>% 
+  left_join(polmode, by = "pollentaxon") %>% 
   ungroup()
 
 saveRDS(dfPOL, "RDS_files/01_Pollen_data_Scot.rds")
@@ -137,7 +147,6 @@ dfPOL_nc <- dfPOL %>%
   group_by(sitename, pollentaxon) %>%
   summarise(percent = sum(percent)) 
 
-n <- 100 # number of draws from RPP distribution
 dfPOL_cor <- dfPOL %>%
   # join with ppe data 
   left_join(ppe, by = c("pollentaxon" = "joining_taxon")) %>% 
@@ -147,7 +156,7 @@ dfPOL_cor <- dfPOL %>%
   mutate(mean = count/RPP) %>%  
   # correction with random draw from RPP distribution
   rowwise() %>%
-  mutate(col_rnorm = list(setNames(count/rnorm(n, RPP, RPP_sd), paste0("draw", 1:n)))) %>%
+  mutate(col_rnorm = list(setNames(count/replicate(n,norm_positive(RPP, RPP_sd)), paste0("draw",1:n)))) %>%
   unnest_wider(col_rnorm) %>% 
   # calculate percentages
   group_by(sitename) %>% 
@@ -159,7 +168,7 @@ dfPOL_cor <- dfPOL %>%
 dfPOL <- dfPOL_nc %>% 
   left_join(dfPOL_cor, by = c("sitename", "pollentaxon")) %>% 
   # add PFT and pollination mode
-  left_join(pollenmode, by = "pollentaxon") %>% 
+  left_join(polmode, by = "pollentaxon") %>% 
   ungroup()
 
 saveRDS(dfPOL, "RDS_files/01_Pollen_data_Swiss.rds")
