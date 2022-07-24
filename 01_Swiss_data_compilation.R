@@ -116,6 +116,7 @@ bdm_sp <- bdm_sp %>%
 
 saveRDS(bdm_sp, "RDS_files/01_Species_abundance_Swiss.rds")
 
+
 ## ---- Traits
 bdm_traits <- bdm_traits %>% 
   left_join(bdm_sp_codes, by = c("species_code" = "Species_code")) %>% 
