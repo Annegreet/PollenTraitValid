@@ -23,7 +23,8 @@ library(readxl)
 plantheight_raw <- read_xlsx("Data/Plant_height.xlsx")
 sla_ldmc_raw <- read_xlsx("Data/LDMC_SLA_dataset.xlsx")
 cn_raw <- read_xlsx("Data/CN_dataset_150.xlsx")
-harm <- read_xlsx("Data/Harmonization_table_species_names.xlsx")
+harm <- read_xlsx("Data/Harmonization_table_species_names.xlsx") %>% 
+  rename(family = fam)
 
 ## Plant height ----
 # make plant height data tidy
@@ -41,7 +42,7 @@ plantheight <- plantheight_raw %>%
   mutate(flowering = 
            ifelse(Flowering == measurement, "Flowering","Not-flowering")) %>% 
   # harmonise column names
-  select(sitename = Site, species = Species, flowering,
+  dplyr::select(sitename = Site, species = Species, flowering,
          measurementID = measurement, PlantHeight) %>% 
   # get rid of the duplicate rows introduced by separate_rows (measurement id avoids deletion of actual duplicates)
   distinct(sitename, species, measurementID, PlantHeight, .keep_all = TRUE) %>% 
@@ -53,7 +54,7 @@ saveRDS(plantheight, "RDS_files/01_PlantHeight.rds")
 ## SLA ----
 sla <- sla_ldmc_raw %>% 
   # Harmonize column names
-  select(sitename = Site, species = Species,
+  dplyr::select(sitename = Site, species = Species,
           SLA = `SLA (mm^2 mg−1)`) %>% 
   # create measurement ID
   group_by(sitename, species) %>% 
@@ -67,7 +68,7 @@ saveRDS(sla, "RDS_files/01_SLA.rds")
 
 ## LDMC ----
 ldmc <- sla_ldmc_raw %>% 
-  select(sitename = Site, species = Species,
+  dplyr::select(sitename = Site, species = Species,
          LDMC = "LDMC (mg g–1)") %>% 
   distinct(sitename, species, .keep_all = TRUE) %>%  # ldmc has one measurement per species per site
   # create measurement ID
@@ -83,7 +84,7 @@ saveRDS(ldmc, "RDS_files/01_LDMC.rds")
 
 ## LA ----
 la <- sla_ldmc_raw %>% 
-  select(sitename = Site, species = Species,
+  dplyr::select(sitename = Site, species = Species,
          LA = "Leaf_area (mm^2)") %>% 
   # create measurement ID
   group_by(sitename, species) %>% 
@@ -93,7 +94,6 @@ la <- sla_ldmc_raw %>%
   # merge with species harmonisation list
   left_join(harm, by = "species") %>% 
   filter(!is.na(LA)) # check notes from raw data file for reason why missing
-
 saveRDS(la, "RDS_files/01_LA.rds")
     
 ## C ----
@@ -104,13 +104,13 @@ ab_lookup <- tibble(new.name = sla_ldmc_raw$Species) %>%
   filter(!is.na(spec)) %>% 
   mutate(spec = str_to_lower(spec)) %>% 
   mutate(old.name = paste0(str_extract(genus,pattern = "[:alpha:]"), ".", spec)) %>% 
-  select(new.name, old.name)
+  dplyr::select(new.name, old.name)
 regex_pattern <- setNames(ab_lookup$new.name, paste0("\\b", ab_lookup$old.name, "\\b"))
 cn <- cn_raw %>% 
   # correct names
   mutate(Name = str_replace_all(Name, regex_pattern)) %>% 
   # Harmonize column names
-  select(sitename = Site, species = Name,
+  dplyr::select(sitename = Site, species = Name,
          N = `N%`, C = `C%`) %>% 
   # create measurement ID
   group_by(sitename, species) %>% 
@@ -119,19 +119,5 @@ cn <- cn_raw %>%
   arrange(sitename, species, measurementID) %>% 
   # merge with species harmonisation list
   left_join(harm, by = "species") %>% 
-  select(-...1, -measurementID)
+  dplyr::select(-measurementID)
 saveRDS(cn, "RDS_files/01_CN.rds")
-
-# Plot 
-sample_size <- sla %>% 
-  group_by(pollentaxon) %>% 
-  summarise(n = n())
-p <- sla %>%
-  ggplot( aes(x=pollentaxon, y=SLA)) +
-  geom_violin(width=2.1, size=0.2, fill = "darkorchid") +
-  theme_bw() +
-  theme(legend.position="none") +
-  coord_flip() + # This switch X and Y axis and allows to get the horizontal version
-  xlab("") +
-  ylab("SLA (mm2/mg)")
-p
