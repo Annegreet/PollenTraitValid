@@ -78,7 +78,7 @@ veg_type_labels <- c(HISTO_1 = "C1: Water",
 
 # make data tidy
 zone_b <- zone_b %>% 
-  select(sitename = name, lat, lon, contains("HISTO")) %>% 
+  dplyr::select(sitename = name, lat, lon, contains("HISTO")) %>% 
   pivot_longer(cols = contains("HISTO"), names_to = "veg_type") %>% 
   # rename veg_types
   mutate(veg_type = recode(veg_type, !!!veg_type_labels),
@@ -97,7 +97,7 @@ zone_b <- zone_b %>%
 
 # make data tidy
 zone_c <- zone_c %>% 
-  select(sitename = name, lat, lon, contains("HISTO")) %>% 
+  dplyr::select(sitename = name, lat, lon, contains("HISTO")) %>% 
   pivot_longer(cols = contains("HISTO"), names_to = "veg_type") %>% 
   # rename veg_types
   mutate(veg_type = recode(veg_type, !!!veg_type_labels),
@@ -127,7 +127,7 @@ zone_b_site <- zone_b_site %>%
   separate(name, c("sitename", "plot")) %>% 
   # recode veg_type
   mutate(veg_type = as.factor(rvalue_1)) %>% 
-  select(sitename, plot, lat, lon, veg_type) %>% 
+  dplyr::select(sitename, plot, lat, lon, veg_type) %>% 
   mutate(veg_type = recode(veg_type, 
                            "1" = "C1: Water",
                            "2" = "D1: Raised and blanket bogs",
@@ -160,7 +160,7 @@ spec_b <- spec_b_raw %>%
   pivot_longer(contains("plot"), names_to = "plot", values_to = "abun",
                values_drop_na = TRUE) %>% 
   mutate(plot = str_remove(plot, "plot_ ")) %>% 
-  select(sitename = Site, plot, species = Species, abun) %>% 
+  dplyr::select(sitename = Site, plot, species = Species, abun) %>% 
   # join with vegetation type data
   left_join(zone_b_site, by = c("sitename", "plot"))
 ```
@@ -180,8 +180,8 @@ veg_cover_bc <- spec_b %>%
   # weight species abundance by veg cover
   mutate(spec_abun_b = abun*veg_cov_b, spec_abun_c = abun*veg_cov_c) %>% 
   # drop unneeded columns
-  select(sitename, veg_type, species, veg_cov_b, veg_cov_c, spec_abun_b,
-         spec_abun_c)
+  dplyr::select(sitename, veg_type, species, veg_cov_b, veg_cov_c,
+                spec_abun_b,spec_abun_c)
 
 # print table with missing species data for vegetation types
 missing_vegtype <- veg_cover_bc %>% 
@@ -201,10 +201,10 @@ missing <- spec_b %>%
 
 veg_cover_bc_na <- veg_cover_bc %>% 
   filter(is.na(species)) %>%
-  select(-species) %>% 
+  dplyr::select(-species) %>% 
   left_join(missing, by = "veg_type") %>% 
   mutate(spec_abun_b = abun*veg_cov_b, spec_abun_c = abun*veg_cov_c) %>% 
-  select(sitename, veg_type, species, veg_cov_b, veg_cov_c, spec_abun_b,
+  dplyr::select(sitename, veg_type, species, veg_cov_b, veg_cov_c, spec_abun_b,
          spec_abun_c)
 
 veg_cover_bc <-  veg_cover_bc %>% 
@@ -252,9 +252,7 @@ spec_a <- spec_a_raw %>%
 ## Standardization species names
 
 ```{r standardize species names}
-harm <- read_xlsx("Data/Harmonization_table_species_names.xlsx") %>% 
-  select(-1)
-
+harm <- read_xlsx("Data/Harmonization_table_species_names.xlsx") 
 spec_a <- spec_a %>% 
   left_join(harm, by = "species")
 veg_cover_bc <- veg_cover_bc %>% 
