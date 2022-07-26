@@ -23,50 +23,63 @@ if(!require(rioja)) install.packages("rioja") # plot pollen diagrams
 if(!require(ggrepel)) install.packages("ggrepel") # repel point labels
 if(!require(readxl)) install.packages("readxl") # repel point labels
 
-# - compare representation of pollen in vegetation
-# - classify by pollination mode
-# - classify by woody/non-woody
-# - compare with and without correction factors
-
-
 ## Prepare data ----
 dfPOL_Scot <- readRDS("RDS_files/01_Pollen_data_Scot.rds")
 dfPOL_Swiss <- readRDS("RDS_files/01_Pollen_data_Swiss.rds")
 dfPOL <- bind_rows(dfPOL_Scot, dfPOL_Swiss)
-
+polmode <- readRDS("RDS_files/01_Pollination_mode.rds")
 polspec <- readRDS("RDS_files/02_PollenType_species.rds") %>% 
-  dplyr::select(pollentaxon, stand.spec) %>% as_tibble()
+  dplyr::select(pollentaxon, stand.spec) %>% distinct() %>% as_tibble()
 dfABUN_a <- readRDS("RDS_files/01_Species_abundance_a.rds")
 dfABUN_bc <- readRDS("RDS_files/01_Species_abundance_bc.rds") %>% ungroup
-bdm_abun <- readRDS("RDS_files/01_Species_abundance_Swiss.rds") %>% 
-  left_join(polspec, by = c("binom" = "stand.spec"))
+bdm_abun <- readRDS("RDS_files/01_Species_abundance_Swiss.rds") 
 
 # Summarize vegetation data by pollen type
 zoneA <- dfABUN_a %>%
+  # join with pollen to species table
+  left_join(polspec, by = "stand.spec") %>% 
+  mutate(pollentaxon = if_else(is.na(pollentaxon), "Not in pollen data", pollentaxon)) %>% 
   # select plots that are comparable with Switzerland
   filter(distance %in% c("0 meter", "1.5-3 meter")) %>% 
-  # average species abundance on the zone level
-  group_by(sitename,pollentaxon) %>% 
-  summarise(abun = mean(abun)/100) %>%  
+  # calculate species abundance on the plot level
+  group_by(sitename, pollentaxon) %>% 
+  summarise(abun = sum(abun)) %>% 
+  mutate(abun = abun/sum(abun)) %>% 
+  filter(!is.nan(abun)) %>%  
   mutate(zone = "zoneA",
          country = "Scotland")
 zoneA_swiss <- bdm_abun %>% 
-  group_by(plot, pollentaxon) %>% 
-  summarise(abun = mean(abun)) %>% 
-  rename(sitename = plot)%>%  
+  # join with pollen to species table
+  left_join(polspec, by = c("stand.spec" )) %>% 
+  mutate(pollentaxon = if_else(is.na(pollentaxon), "Not in pollen data", pollentaxon)) %>% 
+  # calculate species abundance on the plot level
+  group_by(sitename, pollentaxon) %>% 
+  summarise(abun = sum(abun)) %>% 
+  mutate(abun = abun/sum(abun)) %>% 
+  filter(!is.nan(abun)) %>% 
   mutate(sitename = as.character(sitename),
          zone = "zoneA",
          country = "Switzerland")
 zoneB <- dfABUN_bc %>% 
-  # average species abundance on the zone level
+  # join with pollen to species table
+  left_join(polspec, by = c("stand.spec" )) %>% 
+  mutate(pollentaxon = if_else(is.na(pollentaxon), "Not in pollen data", pollentaxon)) %>% 
+  # calculate species abundance on the plot level
   group_by(sitename, pollentaxon) %>% 
-  summarise(abun = mean(spec_abun_b)/100)%>%  
+  summarise(abun = sum(spec_abun_b)) %>% 
+  mutate(abun = abun/sum(abun)) %>% 
+  filter(!is.nan(abun)) %>% 
   mutate(zone = "zoneB",
          country = "Scotland")
 zoneC <- dfABUN_bc %>% 
-  # average species abundance on the zone level
+  # join with pollen to species table
+  left_join(polspec, by = c("stand.spec" )) %>% 
+  mutate(pollentaxon = if_else(is.na(pollentaxon), "Not in pollen data", pollentaxon)) %>% 
+  # calculate species abundance on the plot level
   group_by(sitename, pollentaxon) %>% 
-  summarise(abun = mean(spec_abun_c)/100)%>%  
+  summarise(abun = sum(spec_abun_c)) %>% 
+  mutate(abun = abun/sum(abun)) %>% 
+  filter(!is.nan(abun)) %>% 
   mutate(zone = "zoneC",
          country = "Scotland")
 
@@ -103,9 +116,9 @@ zone_lab <- c("Zone A (0 - 3.4 m)", "Zone B (10 - 100 m)", "Zone C (100 - 1000 m
 names(zone_lab) <- c("A", "B", "C")
 (pol_veg_plot <- veg %>% 
   group_by(zone, pollentaxon) %>% 
-  summarise(veg = mean(abun,na.rm = T), pol = mean(percent,na.rm = T)) %>% 
+  summarise(veg = mean(abun,na.rm = T), pol = median(percent,na.rm = T)) %>% 
   left_join(polmode, by = "pollentaxon") %>% 
-ggplot(aes(x = veg*10, y = pol)) +
+ggplot(aes(x = veg, y = pol)) +
   geom_point(aes(col = pollination)) +
   # annotations
   geom_abline(intercept = 0, slope = 1) + 
@@ -122,7 +135,7 @@ ggplot(aes(x = veg*10, y = pol)) +
 
 (pol_veg_plot_adj <- veg %>% 
   group_by(zone, pollentaxon) %>% 
-  summarise(veg = mean(abun,na.rm = T), pol = mean(adjustedpercent,na.rm = T)) %>% 
+  summarise(veg = mean(abun,na.rm = T), pol = median(adjustedpercent_mean,na.rm = T)) %>% 
   left_join(polmode, by = "pollentaxon")%>% 
 ggplot(aes(x = veg, y = pol)) +
   geom_point(aes(col = pollination)) +
