@@ -110,9 +110,10 @@ sum_trait <- dfTRAIT %>%
   group_by(pollentaxon) %>% 
   summarise(nspec = length(unique(stand.spec)),
             nobs = n(),
-            SLA = paste(round(mean(SLA), 1), "±", round(sd(SLA), 2)),
-            LA = paste(round(mean(LA), 1), "±", round(sd(LA), 1)),
-            `Plant height` = paste(round(mean(PlantHeight), 1), "±", round(sd(PlantHeight), 1)))
+            SLA = paste(round(mean(SLA), 1), "+-", round(sd(SLA), 2)),
+            LA = paste(round(mean(LA), 1), "+-", round(sd(LA), 1)),
+            `Plant height` = paste(round(mean(PlantHeight), 1), "+-", round(sd(PlantHeight), 1))) %>% 
+  drop_na()
 
 saveRDS(dfTRAIT, "RDS_files/02_Gapfilled_traits.rds")
 
