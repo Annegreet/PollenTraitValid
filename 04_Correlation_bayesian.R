@@ -72,64 +72,56 @@ dfCWM <- files %>%
                             zone == "pollen" ~ "pollentaxon",
                             TRUE ~ "stand.spec"),
          country = str_extract(label, pattern = "Scotland|Switzerland")
-  )
+  ) 
 
 
 Trait <- dfCWM %>%
-  filter(trait == "PlantHeight",
-         growthform == "all",
-         pollination == "all",
-         taxres %in% c("pollentaxon", "species")) %>%
-  filter(zone %in% c("pollen","zoneA"),
-         country == "Scotland") %>%
-  dplyr::select(zone, id, Mean) %>%
-  pivot_wider(id_cols = c("id", "zone"), names_from = zone, values_from = Mean) 
+  filter(label %in% c("pollen_Scotland_PlantHeight_percent",
+                      "zoneB_Scotland_PlantHeight_stand.spec_windNAnot wind_treeshrubNAherbgrassfern")) %>%
+  dplyr::select(label, id, Mean, SD) %>%
+  pivot_wider(names_from = label, values_from = c(Mean,SD)) %>% 
+  rename(pollen_mean = 2, zoneA_mean =3, pollen_sd=4, zoneA_sd=5)
 
-plot(Trait)
-N <- nrow(Trait)
-
-set.seed(31415)
-
-mu <- c(10, 30)
-sigma <- c(20, 40)
-rho <- -0.7
-cov_mat <- rbind(c(sigma[1]^2, sigma[1]*sigma[2]*rho),
-                 c(sigma[1]*sigma[2]*rho, sigma[2]^2))
-N <- 30
-Trait <- rmvnorm(N, mu, cov_mat)
-plot(x, xlim=c(-125, 125), ylim=c(-100, 150))
-
+CWM_mean <- Trait %>% 
+  dplyr::select(pollen_mean, zoneA_mean) %>% 
+  as.matrix()
+CWM_sd <- Trait %>% 
+  dplyr::select(pollen_sd, zoneA_sd) %>% 
+  as.matrix()
+N <- nrow(CWM_mean)
 
 # https://www.sumsar.net/blog/2013/08/bayesian-estimation-of-correlation/
 model_string <- "
   model {
     for(i in 1:N) {
-      Trait[i,1:2] ~ dmnorm(mu[], prec[ , ])
+      CWM_mean[i,1:2] ~ dmnorm(mu[], prec[,,i])
     }
 
     # Constructing the covariance matrix and the corresponding precision matrix.
-    prec[1:2,1:2] <- inverse(cov[,])
-    cov[1,1] <- sigma[1] * sigma[1]
-    cov[1,2] <- sigma[1] * sigma[2] * rho
-    cov[2,1] <- sigma[1] * sigma[2] * rho
-    cov[2,2] <- sigma[2] * sigma[2]
+    for(i in 1:N){
+      prec[1:2,1:2,i] <- inverse(cov[,,i])
+      cov[1,1,i] <- CWM_sd[i,1] * CWM_sd[i,1]
+      cov[1,2,i] <- CWM_sd[i,1] * CWM_sd[i,2] * rho
+      cov[2,1,i] <- CWM_sd[i,1] * CWM_sd[i,2] * rho
+      cov[2,2,i] <- CWM_sd[i,2] * CWM_sd[i,2]
+    }
 
-    # Uninformative priors on all parameters which could, of course, be made more informative.
-    sigma[1] ~ dunif(0, 1000)
-    sigma[2] ~ dunif(0, 1000)
+    # Priors
     rho ~ dunif(-1, 1)
     mu[1] ~ dnorm(0, 0.001)
     mu[2] ~ dnorm(0, 0.001)
 
     # Generate random draws from the estimated bivariate normal distribution
-    x_rand ~ dmnorm(mu[], prec[ , ])
-
-    #data# N, Trait
-    #monitor# mu, rho, sigma, x_rand
+    for(i in 1:N){
+      x_rand[i,1:2] ~ dmnorm(mu[], prec[,,i])
+      }
+    #data# N, CWM_mean, CWM_sd
+    #monitor# rho
   }"
 
-inits_list <-  list(mu = c(mean(x[, 1]), mean(x[, 2])),
-                  rho = cor(x[, 1], x[, 2]),
-                  sigma = c(sd(x[, 1]), sd(x[, 1])))
+inits_list <-  list(mu = c(0, 10),
+                  rho = cor(CWM_mean[, 1], CWM_mean[, 2]))
 
-run.jags(model_string, inits = inits_list)
+results <- run.jags(model_string, inits = inits_list)
+
+plot(Trait$pollen_mean, Trait$zoneA_mean)
