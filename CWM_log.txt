@@ -1,0 +1,18 @@
+model {
+      for (i in 1:Nsites){
+    cwm[i] ~ dnorm(mean.tax[r[i]], tau.tax[r[i]])
+    r[i] ~ dcat(Ab[i, 1:Ntax])
+    }
+    for (i in 1:N) {
+      Trait[i] ~ dlnorm(mean.tax[Tax[i]], tau.tax[Tax[i]])
+    }
+    for (l in 1:Ntax){
+    # vague priors taxon level
+      mean.tax[l] ~ dnorm(0, 10^-4)
+      tau.tax[l] ~ dgamma(0.001, 0.001)
+      sd.tax[l] <- sqrt(1/tau.tax[l])
+    }
+    #data# N, Nsites, Trait, Tax, Ntax, Ab
+    #monitor# mean.tax, sd.tax, cwm
+    #inits# mean.tax, tau.tax
+  }
