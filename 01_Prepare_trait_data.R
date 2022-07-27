@@ -121,3 +121,27 @@ cn <- cn_raw %>%
   left_join(harm, by = "species") %>% 
   dplyr::select(-measurementID)
 saveRDS(cn, "RDS_files/01_CN.rds")
+
+## SUmmary table per pollentaxon
+spec <- readRDS("RDS_files/02_PollenType_species.rds")
+
+sum_ph <- plantheight %>% 
+  left_join(spec, by = c("species" = "stand.spec")) %>% 
+  group_by(pollentaxon) %>% 
+  summarise(nspec = length(unique(stand.spec)),
+            nobs = n(),
+            PlantHeight = paste(round(mean(PlantHeight), 1), "+-", round(sd(PlantHeight), 1)))
+sum_la <- la %>% 
+  left_join(spec, by = c("species" = "stand.spec")) %>% 
+  group_by(pollentaxon) %>% 
+  summarise(nspec = length(unique(stand.spec)),
+            nobs = n(),
+            LA = paste(round(mean(LA), 1), "+-", round(sd(LA), 1)))
+sum_sla <- sla %>% 
+  left_join(spec, by = c("species" = "stand.spec")) %>% 
+  group_by(pollentaxon) %>% 
+  summarise(nspec = length(unique(stand.spec)),
+            nobs = n(),
+            PlantHeight = paste(round(mean(SLA), 1), "+-", round(sd(SLA), 1)))
+
+rm(list=setdiff(ls(), c("sum_ph", "sum_la", "sum_sla")))
