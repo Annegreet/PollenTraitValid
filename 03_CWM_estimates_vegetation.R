@@ -27,6 +27,7 @@ if(!require(Hmisc)  )install.packages("Hmisc")
 if(!require(furrr))  install.packages("furrr")
 if(!require(LCVP)) install.packages("LCVP")
 if(!require(lcvplants)) install.packages("lcvplants")
+if(!require(FD)) install.packages("FD")
 
 set.seed(1)
 
@@ -34,9 +35,8 @@ set.seed(1)
 # Trait data ----
 # Scotland ----
 plantheight <- readRDS("RDS_files/01_PlantHeight.rds") %>% 
-  mutate(sitename = as.factor(sitename), species = as.factor(species),
-         PlantHeight = PlantHeight) %>% # plantheight in centimeter
-  ungroup()
+  mutate(sitename = as.factor(sitename), species = as.factor(species)) %>% 
+  ungroup() 
 ldmc <- readRDS("RDS_files/01_LDMC.rds") %>% 
   mutate(sitename = as.factor(sitename), species = as.factor(species)) %>% 
   ungroup()
@@ -99,16 +99,26 @@ zoneC <- dfABUN_bc %>%
             by = c("stand.spec" = "AccSpeciesName")) %>% 
   ungroup %>% 
   dplyr::select(sitename, stand.spec, genus, family = fam, abun = spec_abun_c, growthform, polmode)
+lABUN <- list("zoneA" = zoneA, "zoneB" = zoneB, "zoneC" = zoneC)
 
 selectedtrait <- "PlantHeight"
-abun <- zoneB
-selectedpolmode <- unique(dfPFT$polmode)
+selectedabun <- "zoneB"
+selectedpolmode <- unique(dfPFT$polmode)[2]
 selectedpft <- unique(dfPFT$growthform)
 selectedtaxres <- "stand.spec"
 
-# Calculate CWM Scotland----
-cwm_func <- function(abun, selectedtrait,selectedtaxres, selectedpolmode, selectedpft){
-  taxa <- abun %>% 
+trsh <- c("tree", "shrub")
+herb <- c("herb", "grass", "fern")
+allpft  <- c("tree","herb","grass","fern","shrub", NA)
+wind <- "wind"
+nowind <- "not wind"
+allpol <- c("wind", "not wind", NA)
+
+# Scotland----
+if(0){ 
+cwm_func <- function(selectedabun, selectedtrait,selectedtaxres, selectedpolmode, selectedpft){
+  taxa <- lABUN %>% 
+    pluck(selectedabun) %>% 
     arrange(sitename,selectedtaxres) %>% 
     # optional filter for polmode and pft
     filter(polmode %in% selectedpolmode) %>% 
@@ -117,7 +127,8 @@ cwm_func <- function(abun, selectedtrait,selectedtaxres, selectedpolmode, select
     pull(selectedtaxres) %>% 
     unique()
   
-  Ab <- abun %>%
+  Ab <- lABUN %>% 
+    pluck(selectedabun) %>% 
     arrange(sitename,selectedtaxres) %>% 
     # optional filter for polmode and pft
     filter(polmode %in% selectedpolmode) %>% 
@@ -220,190 +231,202 @@ cwm_func <- function(abun, selectedtrait,selectedtaxres, selectedpolmode, select
   dev.off()
   
   res <- as.data.frame(summary(results)) %>% 
-    mutate(sitename = sitenames)
+    mutate(sitenames = sitenames,
+    trait = selectedtrait,
+    growthform = case_when(all(selectedpft == trsh) ~ "trsh",
+                          all(selectedpft == herb) ~ "herb",
+                          TRUE ~ "allpft"),
+    pollination = case_when(all(selectedpolmode == wind) ~ "wind",
+                            all(selectedpolmode == nowind) ~ "no wind",
+                            TRUE ~ "allpol"),
+    taxres = selectedtaxres,
+    zone = selectedabun)
+  
   saveRDS(res, paste0("RDS_files/03_CWM_estimates_", deparse(substitute(abun)),"_Scotland_", selectedtrait,
                       "_", selectedtaxres, "_", 
                       paste(selectedpolmode,collapse = ""),"_",paste(selectedpft,collapse = ""),".rds"))
 }
+
 ## Zone A
 # all 
 plan(multisession(workers = 2))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneA, 
+                  ~cwm_func(selectedabun = "zoneA", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = unique(zoneA$polmode),
-                            selectedpft = unique(zoneA$growthform)),
+                            selectedpolmode = allpol,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 # pollination
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneA, 
+                  ~cwm_func(selectedabun = "zoneA", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = "not wind",
-                            selectedpft = unique(zoneA$growthform)),
+                            selectedpolmode = nowind,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneA, 
+                  ~cwm_func(selectedabun = "zoneA", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = "wind",
-                            selectedpft = unique(zoneA$growthform)),
+                            selectedpolmode = wind,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 # growth form
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneA, 
+                  ~cwm_func(selectedabun = "zoneA", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = unique(zoneA$polmode),
-                            selectedpft = c("tree", "shrub")),
+                            selectedpolmode = allpol,
+                            selectedpft = trsh),
                   .options = furrr_options(seed = TRUE))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneA, 
+                  ~cwm_func(selectedabun = "zoneA", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = unique(zoneA$polmode),
-                            selectedpft = c("grass", "herb", "fern")
+                            selectedpolmode = allpol,
+                            selectedpft = herb
                             ),
                   .options = furrr_options(seed = TRUE))
 # Taxonomic resolution
 plan(multisession(workers = 2))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneA, 
+                  ~cwm_func(selectedabun = "zoneA", 
                             selectedtrait = .,
                             selectedtaxres = "genus",
-                            selectedpolmode = unique(zoneA$polmode),
-                            selectedpft = unique(zoneA$growthform)),
+                            selectedpolmode = allpol,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneA, 
+                  ~cwm_func(selectedabun = "zoneA", 
                             selectedtrait = .,
                             selectedtaxres = "family",
-                            selectedpolmode = unique(zoneA$polmode),
-                            selectedpft = unique(zoneA$growthform)),
+                            selectedpolmode = allpol,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 
 ## Zone B
 # all 
-plan(multisession(workers = 2))
+plan(multisession(workers = ))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneB, 
+                  ~cwm_func(selectedabun = "zoneB", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = unique(zoneB$polmode),
-                            selectedpft = unique(zoneB$growthform)),
+                            selectedpolmode = allpol,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 # pollination
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneB, 
+                  ~cwm_func(selectedabun = "zoneB", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = "not wind",
-                            selectedpft = unique(zoneB$growthform)),
+                            selectedpolmode = nowind,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneB, 
+                  ~cwm_func(selectedabun = "zoneB", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = "wind",
-                            selectedpft = unique(zoneB$growthform)),
+                            selectedpolmode = wind,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 # growth form
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneB, 
+                  ~cwm_func(selectedabun = "zoneB", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = unique(zoneB$polmode),
-                            selectedpft = c("tree", "shrub")),
+                            selectedpolmode = allpol,
+                            selectedpft = trsh),
                   .options = furrr_options(seed = TRUE))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneB, 
+                  ~cwm_func(selectedabun = "zoneB", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = unique(zoneB$polmode),
-                            selectedpft = c("grass", "herb", "fern")
+                            selectedpolmode = allpol,
+                            selectedpft = herb
                   ),
                   .options = furrr_options(seed = TRUE))
 # Taxonomic resolution
 plan(multisession(workers = 2))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneB, 
+                  ~cwm_func(selectedabun = "zoneB", 
                             selectedtrait = .,
                             selectedtaxres = "genus",
-                            selectedpolmode = unique(zoneB$polmode),
-                            selectedpft = unique(zoneB$growthform)),
+                            selectedpolmode = allpol,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneB, 
+                  ~cwm_func(selectedabun = "zoneB", 
                             selectedtrait = .,
                             selectedtaxres = "family",
-                            selectedpolmode = unique(zoneB$polmode),
-                            selectedpft = unique(zoneB$growthform)),
+                            selectedpolmode = allpol,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 
 ## Zone C
 # all 
 plan(multisession(workers = 2))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneC, 
+                  ~cwm_func(selectedabun = "zoneC", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = unique(zoneC$polmode),
-                            selectedpft = unique(zoneC$growthform)),
+                            selectedpolmode = allpol,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 # pollination
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneC, 
+                  ~cwm_func(selectedabun = "zoneC", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = "not wind",
-                            selectedpft = unique(zoneC$growthform)),
+                            selectedpolmode = nowind,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneC, 
+                  ~cwm_func(selectedabun = "zoneC", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = "wind",
-                            selectedpft = unique(zoneC$growthform)),
+                            selectedpolmode = wind,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 # growth form
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneC, 
+                  ~cwm_func(selectedabun = "zoneC", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = unique(zoneC$polmode),
-                            selectedpft = c("tree", "shrub")),
+                            selectedpolmode = allpol,
+                            selectedpft =trsh),
                   .options = furrr_options(seed = TRUE))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneC, 
+                  ~cwm_func(selectedabun = "zoneC", 
                             selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = unique(zoneC$polmode),
-                            selectedpft = c("grass", "herb", "fern")
+                            selectedpolmode = allpol,
+                            selectedpft = herb
                   ),
                   .options = furrr_options(seed = TRUE))
 # Taxonomic resolution
 plan(multisession(workers = 2))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneC, 
+                  ~cwm_func(selectedabun = "zoneC", 
                             selectedtrait = .,
                             selectedtaxres = "genus",
-                            selectedpolmode = unique(zoneC$polmode),
-                            selectedpft = unique(zoneC$growthform)),
+                            selectedpolmode = allpol,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func(abun = zoneC, 
+                  ~cwm_func(selectedabun = "zoneC", 
                             selectedtrait = .,
                             selectedtaxres = "family",
-                            selectedpolmode = unique(zoneC$polmode),
-                            selectedpft = unique(zoneC$growthform)),
+                            selectedpolmode = allpol,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
-
+}
 
 
 # Switzerland ----
-cwm_func_swiz <- function(abun, selectedtrait,selectedtaxres, selectedpolmode, selectedpft){
-  taxa <- abun %>% 
+if(1){ 
+  cwm_func_swiz <- function(selectedtrait,selectedtaxres, selectedpolmode, selectedpft){
+  taxa <- bdm_abun %>% 
     arrange(sitename,selectedtaxres) %>% 
     # optional filter for polmode and pft
     filter(polmode %in% selectedpolmode) %>% 
@@ -412,7 +435,7 @@ cwm_func_swiz <- function(abun, selectedtrait,selectedtaxres, selectedpolmode, s
     pull(selectedtaxres) %>% 
     unique()
   
-  Ab <- abun %>%
+  Ab <- bdm_abun %>%
     arrange(sitename,selectedtaxres) %>% 
     # optional filter for polmode and pft
     filter(polmode %in% selectedpolmode) %>% 
@@ -500,80 +523,83 @@ cwm_func_swiz <- function(abun, selectedtrait,selectedtaxres, selectedpolmode, s
   
   # trace plots
   plot(results, file =                          
-         paste0("Convergence_diagnostics/Conv_", deparse(substitute(abun)),"_Switzerland_", selectedtrait,
+         paste0("Convergence_diagnostics/Conv_Switzerland_", selectedtrait,
                 "_", selectedtaxres, "_", selectedpolmode,"_",selectedpft, ".pdf")
   )
   
   # gelman plots
-  pdf(paste0("Convergence_diagnostics/Gelman_", deparse(substitute(abun)),"_Switzerland_", selectedtrait,
+  pdf(paste0("Convergence_diagnostics/Gelman_Switzerland_", selectedtrait,
              "_", selectedtaxres, "_", selectedpolmode,"_",selectedpft, ".pdf")
   )
   gelman.plot(results, ask = FALSE)
   dev.off()
   
-  res <- as.data.frame(summary(results)) %>% 
-    mutate(sitename = sitenames)
-  saveRDS(res, paste0("RDS_files/03_CWM_estimates_", deparse(substitute(abun)),"_Switzerland_", selectedtrait,
+  res <- as.data.frame(summary(results))%>% 
+    mutate(sitenames = sitenames,
+           trait = selectedtrait,
+           growthform = case_when(all(selectedpft == trsh) ~ "trsh",
+                                  all(selectedpft == herb) ~ "herb",
+                                  TRUE ~ "allpft"),
+           pollination = case_when(all(selectedpolmode == wind) ~ "wind",
+                                   all(selectedpolmode == nowind) ~ "no wind",
+                                   TRUE ~ "allpol"),
+           taxres = selectedtaxres,
+           zone = selectedabun)
+  saveRDS(res, paste0("RDS_files/03_CWM_estimates_Switzerland_", selectedtrait,
                       "_", selectedtaxres, "_", 
                       paste(selectedpolmode,collapse = ""),"_",paste(selectedpft,collapse = ""),".rds"))
 }
+
 ## Zone A
 # all 
 plan(multisession(workers = 2))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func_swiz(abun = bdm_abun, 
-                            selectedtrait = .,
+                  ~cwm_func_swiz(selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = unique(bdm_abun$polmode),
-                            selectedpft = unique(bdm_abun$growthform)),
+                            selectedpolmode = allpol,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 # pollination
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func_swiz(abun = bdm_abun, 
-                            selectedtrait = .,
+                  ~cwm_func_swiz(selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = "not wind",
-                            selectedpft = unique(bdm_abun$growthform)),
+                            selectedpolmode = nowind,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func_swiz(abun = bdm_abun, 
-                            selectedtrait = .,
+                  ~cwm_func_swiz(selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = "wind",
-                            selectedpft = unique(bdm_abun$growthform)),
+                            selectedpolmode = wind,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 # growth form
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func_swiz(abun = bdm_abun, 
-                            selectedtrait = .,
+                  ~cwm_func_swiz(selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = unique(bdm_abun$polmode),
-                            selectedpft = c("tree", "shrub")),
+                            selectedpolmode = allpol,
+                            selectedpft = trsh),
                   .options = furrr_options(seed = TRUE))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func_swiz(abun = bdm_abun, 
-                            selectedtrait = .,
+                  ~cwm_func_swiz(selectedtrait = .,
                             selectedtaxres = "stand.spec",
-                            selectedpolmode = unique(bdm_abun$polmode),
-                            selectedpft = c("grass", "herb", "fern")
+                            selectedpolmode = allpol,
+                            selectedpft = herb
                   ),
                   .options = furrr_options(seed = TRUE))
 # Taxonomic resolution
 plan(multisession(workers = 2))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func_swiz(abun = bdm_abun, 
-                            selectedtrait = .,
+                  ~cwm_func_swiz(selectedtrait = .,
                             selectedtaxres = "genus",
-                            selectedpolmode = unique(bdm_abun$polmode),
-                            selectedpft = unique(bdm_abun$growthform)),
+                            selectedpolmode = allpol,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
-                  ~cwm_func_swiz(abun = bdm_abun, 
-                            selectedtrait = .,
+                  ~cwm_func_swiz(selectedtrait = .,
                             selectedtaxres = "family",
-                            selectedpolmode = unique(bdm_abun$polmode),
-                            selectedpft = unique(bdm_abun$growthform)),
+                            selectedpolmode = allpol,
+                            selectedpft = allpft),
                   .options = furrr_options(seed = TRUE))
-
+}
 
 
