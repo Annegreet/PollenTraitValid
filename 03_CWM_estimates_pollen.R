@@ -227,7 +227,15 @@ cwmlogfunc <- function(selectedtrait, selectedcountry, selectedabun,
   
   # summarize results
   res <- data.frame(summary(results),
-                   sitename = sitenames)
+                    sitename = sitenames, 
+                    trait = selectedtrait,
+                    country = selectedcountry,
+                    growthform = case_when(all(selectedpft == trsh) ~ "trsh",
+                                           all(selectedpft == herb) ~ "herb",
+                                           TRUE ~ "allpft"),
+                    pollination = case_when(all(selectedpolmode == wind) ~ "wind",
+                                            all(selectedpolmode == nowind) ~ "no wind",
+                                            TRUE ~ "allpol"))
   saveRDS(res, paste0("RDS_files/03_CWM_estimates_pollen_", 
                       selectedcountry,"_", selectedtrait, "_", 
                       deparse(substitute(selectedpft)), ".rds"))
@@ -338,7 +346,11 @@ cwmlogfunc <- function(selectedtrait, selectedcountry, selectedabun,
   
   # summarize results
   res <- data.frame(summary(results),
-                    sitename = sitenames)
+                    sitename = sitenames, 
+                    trait = selectedtrait,
+                    country = selectedcountry,
+                    pollination = selectedpolmode,
+                    growthform = "allpft")
   saveRDS(res, paste0("RDS_files/03_CWM_estimates_pollen_", 
                       selectedcountry,"_", selectedtrait, "_", 
                       deparse(substitute(selectedpolmode)), ".rds"))
