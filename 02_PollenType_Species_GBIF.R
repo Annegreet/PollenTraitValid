@@ -17,7 +17,7 @@
 ##
 ## Notes:
 ## 
-## - evaluate limit setting occ_search
+## 
 ##   
 ## ---------------------------
 
@@ -110,58 +110,35 @@ taxonkeys <-  bind_rows(spkeys, gnkeys, famkeys, classkeys) %>%
 countries <- c("United Kingdom", "Switzerland")
 countrykeys <- isocodes %>% filter(name %in% countries) %>% pull(code)
 
-## create function  that downloads, cleans, saves and creates conversion table for pollen type to species
-if(0){
-gbifsaveclean <- function(taxonkey, countrykey){
-  # perform gbif search
-  occsearch <- occ_search(taxonKey = taxonkey,
-                        country = countrykey,
-                        limit = 1000,  # evaluate limit setting
-                        year = "1990, 2020",
-                        hasCoordinate = T)     
-  
-  # proceed to next steps of the function (cleaning) if the search retrieved data  
-  if(!is.null(occsearch$data)) {
-  # save raw data
-  #saveRDS(occsearch, paste("RDS_files/RawGBIF/GBIFoccurances_", countrykey, taxonkey, ".rds", sep = ""))
-  
-  # only select data element, discard meta
-  occdat <- occsearch$data 
-  
-  # clear empty elements (key didn't retrieve data)
-  occdat <- occdat %>% compact()
-  
-  # clean occurrences
-  occdat <- occdat %>% #purrr::map(. 
-    data.frame() %>%
-      cc_val(lon = "decimalLongitude", lat = "decimalLatitude") %>% # removes records with empty coordinates
-      cc_equ(lon = "decimalLongitude", lat = "decimalLatitude") %>% # removes records with equal latitude and longitude coordinates
-      cc_cap(lon = "decimalLongitude", lat = "decimalLatitude") %>% # removes records within a certain radius around country capitals
-      cc_cen(lon = "decimalLongitude", lat = "decimalLatitude") %>% # removes records within a radius around the geographic centroids of political countries and provinces.
-      cc_inst(lon = "decimalLongitude", lat = "decimalLatitude") %>% # removes records assigned to the location of zoos, botanical gardens, herbaria, universities and museums
-      cc_zero(lon = "decimalLongitude", lat = "decimalLatitude") %>% # removes records with zero  long or lat
-      cc_outl(lon = "decimalLongitude", lat = "decimalLatitude") %>% # removes geographical outliers
-      cc_dupl(lon = "decimalLongitude", lat = "decimalLatitude") # removes duplicates
-     
-  # save cleaned data frame
-  #saveRDS(occdat, paste("RDS_files/CleanGBIF/CleanedGBIFOccurances_", countrykey, taxonkey, ".rds", sep = ""))
+countrykey <- countrykeys[1]
+taxonkey <- taxonkeys[1:2]
 
+## create function  that downloads, cleans, saves and creates conversion table for pollen type to species
+if(1){
+gbifsaveclean <- function(taxonkey, countrykey){
+  # perform gbif download request
+  occsearch <- occ_download(
+    pred_in("basisOfRecord", "HUMAN_OBSERVATION"),
+    pred_in("taxonKey", taxonkey),
+    pred_in("country", countrykey),
+    pred_gte("year", 2012),
+    pred("hasCoordinate", TRUE),
+    format = "SPECIES_LIST")
+  
+  occdata <- occ_download_wait(occsearch)
+  
+  occdata <- occ_download_get(occsearch) %>% 
+    occ_download_import()
+  
   # create species per pollen taxon list
   spec <-
-    occdat %>% 
+    occdata %>% 
+    filter(taxonRank == "SPECIES") %>% 
     dplyr::select_if(colnames(.) %in% c("family", "genus", "species")) %>% 
     drop_na() %>% 
     arrange(species) 
   
-  spec_num <-
-    spec %>% 
-    group_by(species) %>% 
-    summarise(count = n()) %>% 
-    drop_na() %>% 
-    arrange(species)
   spec <- spec %>% distinct()
-  spec <- cbind(spec, spec_num)
-  spec <- spec[,-4] # remove duplicate species column
   
   # standardize species names according to the leipzig plant catalogue
   spec.stand <-
@@ -173,25 +150,14 @@ gbifsaveclean <- function(taxonkey, countrykey){
                     family = spec.stand$Family,
                     country = countrykey)
  spec
-  }
-}
+ }
 
-spec_gb <- 
-  purrr::map(taxonkeys,
-           ~gbifsaveclean(taxonkey = .x, countrykey = "GB")) %>% 
-  # remove empty 
-  keep(., ~is.data.frame(.)) %>% 
-  bind_rows() 
-spec_ch <- purrr::map(taxonkeys,
-                   ~gbifsaveclean(taxonkey = .x, countrykey = "CH")) %>% 
-  # remove empty 
-  keep(., ~is.data.frame(.)) %>% 
-  bind_rows() 
+spec_gb <- gbifsaveclean(taxonkey = taxonkeys, countrykey = "GB")
+
+spec_ch <- gbifsaveclean(taxonkey = taxonkeys, countrykey = "CH")
 
 spec <- bind_rows("Scotland" = spec_gb, "Switzerland" = spec_ch, .id = "country")
 saveRDS(spec, "RDS_files/02_gbif_raw.rds")
-} else{
-spec <- read_rds("RDS_files/02_gbif_raw.rds")
 }
 
 # combine to make table, add pollen taxon
@@ -228,7 +194,8 @@ specpol <- specpol %>%
 
 # some species recorded in the field not retrieved by gbif
 dfABUN_a <- readRDS("RDS_files/01_Species_abundance_a.rds")
-dfABUN_bc <- readRDS("RDS_files/01_Species_abundance_bc.rds") %>% ungroup
+dfABUN_bc <- readRDS("RDS_files/01_Species_abundance_bc.rds") %>% 
+  ungroup
 bdm_abun <- readRDS("RDS_files/01_Species_abundance_Swiss.rds") 
 
 sp_extra <- c(dfABUN_a$stand.spec, dfABUN_bc$stand.spec, bdm_abun$stand.spec) %>% 
