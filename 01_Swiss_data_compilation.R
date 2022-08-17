@@ -59,7 +59,8 @@ bdm_sp_codes <- bdm_sp_codes %>%
                                alcxan = "alcvul", # Alchemilla vulgaris current code alcxan is not in species or trait data, alcvul is
                                soldal = "solalp" # Soldanella alpinia idem
                                ) # soraur,lonneg, rubfru, giumon missing from codes 
-         )
+         ) 
+
 ## Abundance ----
 # Join species codes with abundance data
 bdm_sp <- bdm_sp %>% 
@@ -77,7 +78,9 @@ spec <- bdm_sp %>%
   filter(!is.na(Species)) %>% 
   pull(binom) %>% 
   unique()
+
 lcvp <- lcvp_search(spec) # find synonyms
+
 synonyms <- lcvp %>% 
   dplyr::select(binom = Search, stand_spec = Output.Taxon) %>% 
   mutate(stand_spec = word(stand_spec, 1, 2)) # drop authorship
@@ -88,6 +91,8 @@ regex_pattern <-
 bdm_sp <- bdm_sp %>% 
   # replace by standardized name
   mutate(stand.spec = str_replace_all(binom, regex_pattern)) %>% 
+  # remove sp. epiphet
+  mutate(stand.spec = str_remove(stand.spec, pattern = " sp.")) %>% 
   # select relevant columns, rename
   dplyr::select(sitename = plot, subplot, species_code, family = Family, genus = Genus, 
                 stand.spec, PFT = Functional_group, abun) %>% 
@@ -124,16 +129,21 @@ bdm_traits <- bdm_traits %>%
   filter(plot %in% plot_id)
 bdm_traits <- bdm_traits %>% 
   # replace by standardized name
-  mutate(binom = str_replace_all(binom, regex_pattern)) %>% 
+  mutate(stand.spec = str_replace_all(binom, regex_pattern)) %>% 
   # code unidentified and no plant categories
-  mutate(binom = case_when(!is.na(binom) ~ binom,
-                           str_detect(species_code, pattern = "[:digit:]") ~ "Unindentified",
-                           species_code %in% c("NA", "lonneg","rubfru","giumon","soraur") ~ "Unindentified" # missing species code
-                           )
-         ) %>% 
+  mutate(stand.spec = case_when(!is.na(stand.spec) ~ stand.spec,
+                                species_code %in% c("FO","GR", "CR") ~ "Unindentified",
+                                species_code %in% c("litter", "moss", "deadwood",
+                                                    "dead wood", "dead trunk",
+                                                    "stump", "fungi", "rock",
+                                                    "root", "other", "bareground") ~ "No plants",
+                                str_detect(species_code, pattern = "[:digit:]") ~ "Unindentified",
+                                species_code %in% c("NA", "lonneg","rubfru","giumon","soraur") ~ "Unindentified" # missing species code
+  )
+  ) %>% 
   # select relevant columns, rename to common name 
   dplyr::select(species_code, family = Family, genus = Genus, 
-                binom, PFT = Functional_group,  
+                stand.spec, PFT = Functional_group,  
                 LA = area_mg, SLA = SLA_mm2_mg, PlantHeight = height_cm) %>% 
   mutate(LA = LA * 100) #cm2 to mm2
 saveRDS(bdm_traits, "RDS_files/01_Traits_Swiss.rds")
