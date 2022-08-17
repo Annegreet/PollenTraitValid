@@ -3,10 +3,14 @@
 .RData
 .Ruserdata
 .Conver
+*.html
+*.docx
+*.xlsx
 Convergence_diagnostics/
 Data/
 Manuscript/
 Other/
 RDS_files/
 References/
+Figures/
 
