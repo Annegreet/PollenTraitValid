@@ -27,8 +27,6 @@ if(!require(tidyverse)) install.packages("tidyverse")
 if(!require(rgbif)) install.packages("rgbif")
 if(!require(LCVP)) devtools::install_github("idiv-biodiversity/LCVP")
 if(!require(lcvplants)) devtools::install_github("idiv-biodiversity/lcvplants")
-if(!require(CoordinateCleaner)) install.packages("CoordinateCleaner")
-
 
 # Load in pollen data
 dfPOL_scot <- readRDS("RDS_files/01_Pollen_data_Scot.rds")
@@ -121,13 +119,18 @@ gbifsaveclean <- function(taxonkey, countrykey){
     pred_in("basisOfRecord", "HUMAN_OBSERVATION"),
     pred_in("taxonKey", taxonkey),
     pred_in("country", countrykey),
-    pred_gte("year", 2012),
+    pred_gte("year", 2012), # observation from 2012 onwards
     pred("hasCoordinate", TRUE),
-    format = "SPECIES_LIST")
+    format = "SPECIES_LIST") # only download species list, not occurrence points
   
   occdata <- occ_download_wait(occsearch)
   
-  occdata <- occ_download_get(occsearch) %>% 
+  occdata <- occ_download_get(occsearch, path = "Data/GBIF-requests/",
+                              overwrite = TRUE) %>% 
+    occ_download_import()
+  # for already downloaded data
+  occdata <- occ_download_get(str_remove(list.files(path = "Data/GBIF-requests/")[1], ".zip"),
+                              overwrite = TRUE) %>% 
     occ_download_import()
   
   # create species per pollen taxon list
@@ -142,7 +145,8 @@ gbifsaveclean <- function(taxonkey, countrykey){
   
   # standardize species names according to the leipzig plant catalogue
   spec.stand <-
-    lcvp_search(spec$species,progress_bar = TRUE) 
+    lcvp_search(spec$species, progress_bar = TRUE) 
+  
   spec <-
     spec %>% mutate(stand.spec = word(spec.stand$Output.Taxon, 1,2) %>% # only keep binomial without authority 
                       str_remove("_x"),# x added for unknown reason,
@@ -186,24 +190,56 @@ duplicats <- specpol %>%
 specpol <- specpol %>% 
   # missing alternative name
   mutate(stand.spec = replace(.$stand.spec,
-                              .$spec == "Rabelera holostea",
+                              .$species == "Rabelera holostea",
                               values = "Stellaria holostea")) %>% 
+  # lcvp didn't retrieve synonym
+  filter(!species == "Aria edulis") %>% 
+  add_row(family = "Rosaceae", genus = "Sorbus", species = "Sorbus aria", 
+          stand.spec = "Sorbus aria", country = "Switzerland", pollentaxon = "Rosaceae") %>% 
   # remove na's (after checking for synonyms manually, all cultivars)
   filter(!is.na(stand.spec)) %>% 
   as_tibble()
 
-# some species recorded in the field not retrieved by gbif
+# some species recorded in the field not retrieved by gbif 
+# (mostly because pollen not represented in pollen record)
 dfABUN_a <- readRDS("RDS_files/01_Species_abundance_a.rds")
 dfABUN_bc <- readRDS("RDS_files/01_Species_abundance_bc.rds") %>% 
   ungroup
 bdm_abun <- readRDS("RDS_files/01_Species_abundance_Swiss.rds") 
 
-sp_extra <- c(dfABUN_a$stand.spec, dfABUN_bc$stand.spec, bdm_abun$stand.spec) %>% 
+# Scotland
+sp_extra <- c(dfABUN_a$stand.spec, dfABUN_bc$stand.spec) %>% 
   unique %>% 
-  .[!. %in% unique(specpol$stand.spec)]
-
-lcvp_out <- lcvp_search(str_subset(sp_extra, " |sp.")) %>% as_tibble()
-lcvp <- lcvp_out %>% 
+  .[!. %in% unique(specpol$stand.spec)] # check for missing species
+# find synonyms
+lcvp_out <- lcvp_search(str_subset(sp_extra, " ")) %>% as_tibble()
+# create table with pollentaxon
+lcvp_scot <- lcvp_out %>% 
+  mutate(genus = word(Output.Taxon, 1),
+         stand.spec = word(Output.Taxon, 1,2)) %>% 
+  dplyr::select(family = Family, genus , species = Search, stand.spec) %>% 
+  drop_na() %>% 
+  mutate(pollentaxon = case_when(species %in% sp ~ species,
+                                 genus %in% c("Rumex", "Oxyria") ~ "Rumex/Oxyria",
+                                 genus %in% gn ~ genus,
+                                 family == "Ericaceae" ~ "Ericales (tetrad)",
+                                 family %in% c("Pteridaceae", "Aspleniaceae",
+                                               "Athyriaceae", "Salviniaceae",
+                                               "Dryopteridaceae", "Hymenophyllaceae",
+                                               "Polypodiaceae", "Dryopteridaceae",
+                                               "Dennstaedtiaceae", "Blechnaceae",
+                                               "Thelypteridaceae", "Equisetaceae",
+                                               "Osmundaceae","Cystopteridaceae") ~ "Pteridophyte",
+                                 family %in% fam ~ family)
+  ) 
+# Switzerland
+sp_extra <- bdm_abun$stand.spec %>% 
+  unique %>% 
+  .[!. %in% unique(specpol$stand.spec)] # check for missing species
+# find synonyms
+lcvp_out <- lcvp_search(str_subset(sp_extra, " ")) %>% as_tibble()
+# create table with pollentaxon
+lcvp_swiss <- lcvp_out %>% 
   mutate(genus = word(Output.Taxon, 1),
          stand.spec = word(Output.Taxon, 1,2)) %>% 
   dplyr::select(family = Family, genus , species = Search, stand.spec) %>% 
@@ -222,112 +258,83 @@ lcvp <- lcvp_out %>%
                                  family %in% fam ~ family)
   ) 
 
+# add to pollen species table
 specpol <- specpol  %>% 
-  add_row(lcvp, country = "Scotland") %>%
-  add_row(lcvp, country = "Switzerland") %>% 
+  add_row(lcvp_scot, country = "Scotland") %>%
+  add_row(lcvp_swiss, country = "Switzerland") %>% 
   # missing species
-  add_row(family = "Cyperaceae", genus = "Carex", stand.spec= "Carex sp.", 
-          country = "Scotland", pollentaxon = "Cyperaceae") %>% 
-  add_row(family = "Cyperaceae", genus = "Carex", stand.spec= "Carex sp.", 
+  add_row(family = "Cyperaceae", genus = "Carex", stand.spec= "Carex", 
              country = "Switzerland", pollentaxon = "Cyperaceae") %>% 
-  add_row(family = "Juncaceae", genus = "Juncus", stand.spec= "Juncus sp.", 
+  add_row(family = "Juncaceae", genus = "Juncus", stand.spec= "Juncus", 
           country = "Switzerland", pollentaxon = "Cyperaceae") %>%
-  add_row(family = "Caryophyllaceae", genus = "Cerastium", stand.spec= "Cerastium sp.", 
+  add_row(family = "Caryophyllaceae", genus = "Cerastium", stand.spec= "Cerastium", 
           country = "Switzerland", pollentaxon = "Caryophyllaceae") %>% 
-  add_row(family = "Asteraceae", genus = "Leontondon", stand.spec= "Leontondon sp.", 
-          country = "Switzerland", pollentaxon = "Asteraceae") %>%
-  add_row(family = "Ranunculaceae", genus = "Ranunculus", stand.spec= "Ranunculus sp.", 
+  add_row(family = "Ranunculaceae", genus = "Ranunculus", stand.spec= "Ranunculus", 
           country = "Switzerland", pollentaxon = "Ranunculaceae") %>% 
-  add_row(family = "Primulaceae", genus = "Lysimachia", stand.spec= "Lysimachia europaea", 
-          country = "Switzerland", pollentaxon = "Primulaceae") %>% 
-  add_row(family = "Poaceae", genus = "Festuca", stand.spec= "Festuca sp.", 
+  add_row(family = "Poaceae", genus = "Festuca", stand.spec= "Festuca", 
           country = "Switzerland", pollentaxon = "Poaceae") %>% 
-  add_row(family = "Dryopteridaceae", genus = "Dryopteris", stand.spec= "Dryopteris", 
-          country = "Switzerland", pollentaxon = "Pteridophyte") %>% 
-  add_row(family = "Dryopteridaceae", genus = "Dryopteris", stand.spec= "Dryopteris sp.", 
-          country = "Switzerland", pollentaxon = "Pteridophyte") %>% 
   add_row(family = "Poaceae", genus = NA, stand.spec= "Poaceae",
           country = "Switzerland", pollentaxon = "Poaceae") %>% 
-  add_row(family = "Equisetaceae", genus = "Equisetum", stand.spec= "Equisetum sp.",
+  add_row(family = "Equisetaceae", genus = "Equisetum", stand.spec= "Equisetum",
           country = "Switzerland", pollentaxon = "Pteridophyte") %>% 
-  add_row(family = "Salicaceae", genus = "Salix", stand.spec= "Salix sp.",
+  add_row(family = "Salicaceae", genus = "Salix", stand.spec= "Salix",
           country = "Switzerland", pollentaxon = "Salix") %>% 
-  add_row(family = "Cyperaceae", genus = "Trichophorum", stand.spec= "Trichophorum cespitosum",
-          country = "Switzerland", pollentaxon = "Cyperaceae") %>% 
   add_row(family = "Asteraceae", genus = NA, stand.spec= "Asteraceae",
           country = "Switzerland", pollentaxon = "Asteraceae") %>% 
   add_row(family = "Fabaceae", genus =NA, stand.spec= "Fabaceae",
           country = "Switzerland", pollentaxon = "Fabaceae") %>% 
   add_row(family = "Asteraceae", genus = "Hypochaeris", stand.spec= "Hypochaeris",
           country = "Switzerland", pollentaxon = "Asteraceae") %>% 
-  add_row(family = "Asteraceae", genus = "Jacobea", stand.spec= "Jacobea vulgaris",
-          country = "Switzerland", pollentaxon = "Asteraceae") %>% 
-  add_row(family = "Boraginaceae", genus = "Myosotis", stand.spec= "Myosotis sp.",
+  add_row(family = "Boraginaceae", genus = "Myosotis", stand.spec= "Myosotis",
           country = "Switzerland", pollentaxon = NA) %>% 
-  add_row(family = "Caryophyllaceae", genus = "Stellaria", stand.spec= "Stellaria holostea",
-          country = "Switzerland", pollentaxon = "Caryophyllaceae") %>% 
-  add_row(family = "Asteraceae", genus = "Taraxacum", stand.spec= "Taraxacum sp.",
+  add_row(family = "Asteraceae", genus = "Taraxacum", stand.spec= "Taraxacum",
           country = "Switzerland", pollentaxon = "Asteraceae") %>% 
-  add_row(family = "Blechnaceae", genus = "Blechnum", stand.spec= "Blechnum spicant",
-          country = "Switzerland", pollentaxon = "Pteridophyte") %>% 
-  add_row(family = "Asteraceae", genus = "Cirsium", stand.spec= "Cirsium sp.",
+  add_row(family = "Asteraceae", genus = "Cirsium", stand.spec= "Cirsium",
           country = "Switzerland", pollentaxon = "Asteraceae") %>% 
   add_row(family = "Poaceae", genus = "Glyceria", stand.spec= "Poaceae",
           country = "Switzerland", pollentaxon = "Poaceae") %>% 
-  add_row(family = "Dryopteridaceae", genus = "Dryopteris", stand.spec= "Dryopteris sp. ",
+  add_row(family = "Dryopteridaceae", genus = "Dryopteris", stand.spec= "Dryopteris",
           country = "Switzerland", pollentaxon = "Pteridophyte") %>% 
-  add_row(family = "Primulaceae", genus = "Primula", stand.spec= "Primula vulgaris",
-          country = "Switzerland", pollentaxon = NA) %>% 
+  add_row(family = "Blechnaceae", genus = "Blechnum", stand.spec = "Blechnum spicant",
+          country = "Switzerland", pollentaxon = "Pteridophyte") %>% 
+  add_row(family = "Asteraceae", genus = "Leontondon", stand.spec = "Leontondon",
+          country = "Switzerland", pollentaxon = "Asteraceae") %>% 
   ##
-  add_row(family = "Juncaceae", genus = "Juncus", stand.spec= "Juncus sp.", 
+  add_row(family = "Cyperaceae", genus = "Carex", stand.spec= "Carex", 
+        country = "Scotland", pollentaxon = "Cyperaceae") %>% 
+  add_row(family = "Juncaceae", genus = "Juncus", stand.spec= "Juncus", 
           country = "Scotland", pollentaxon = "Cyperaceae") %>%
-  add_row(family = "Caryophyllaceae", genus = "Cerastium", stand.spec= "Cerastium sp.", 
+  add_row(family = "Caryophyllaceae", genus = "Cerastium", stand.spec= "Cerastium", 
           country = "Scotland", pollentaxon = "Caryophyllaceae") %>% 
-  add_row(family = "Asteraceae", genus = "Leontondon", stand.spec= "Leontondon sp.", 
-          country = "Scotland", pollentaxon = "Asteraceae") %>%
-  add_row(family = "Ranunculaceae", genus = "Ranunculus", stand.spec= "Ranunculus sp.", 
+  add_row(family = "Ranunculaceae", genus = "Ranunculus", stand.spec= "Ranunculus", 
           country = "Scotland", pollentaxon = "Ranunculaceae") %>% 
-  add_row(family = "Primulaceae", genus = "Lysimachia", stand.spec= "Lysimachia europaea", 
-          country = "Scotland", pollentaxon = "Primulaceae") %>% 
-  add_row(family = "Poaceae", genus = "Festuca", stand.spec= "Festuca sp.", 
+  add_row(family = "Poaceae", genus = "Festuca", stand.spec= "Festuca", 
           country = "Scotland", pollentaxon = "Poaceae") %>% 
-  add_row(family = "Dryopteridaceae", genus = "Dryopteris", stand.spec= "Dryopteris", 
-          country = "Scotland", pollentaxon = "Pteridophyte") %>% 
-  add_row(family = "Dryopteridaceae", genus = "Dryopteris", stand.spec= "Dryopteris sp.", 
-          country = "Scotland", pollentaxon = "Pteridophyte") %>% 
   add_row(family = "Poaceae", genus = NA, stand.spec= "Poaceae",
           country = "Scotland", pollentaxon = "Poaceae") %>% 
-  add_row(family = "Equisetaceae", genus = "Equisetum", stand.spec= "Equisetum sp.",
+  add_row(family = "Equisetaceae", genus = "Equisetum", stand.spec= "Equisetum",
           country = "Scotland", pollentaxon = "Pteridophyte") %>% 
-  add_row(family = "Salicaceae", genus = "Salix", stand.spec= "Salix sp.",
+  add_row(family = "Salicaceae", genus = "Salix", stand.spec= "Salix",
           country = "Scotland", pollentaxon = "Salix") %>% 
-  add_row(family = "Cyperaceae", genus = "Trichophorum", stand.spec= "Trichophorum cespitosum",
-          country = "Scotland", pollentaxon = "Cyperaceae") %>% 
   add_row(family = "Asteraceae", genus = NA, stand.spec= "Asteraceae",
           country = "Scotland", pollentaxon = "Asteraceae") %>% 
   add_row(family = "Fabaceae", genus =NA, stand.spec= "Fabaceae",
           country = "Scotland", pollentaxon = "Fabaceae") %>% 
   add_row(family = "Asteraceae", genus = "Hypochaeris", stand.spec= "Hypochaeris",
           country = "Scotland", pollentaxon = "Asteraceae") %>% 
-  add_row(family = "Asteraceae", genus = "Jacobea", stand.spec= "Jacobea vulgaris",
-          country = "Scotland", pollentaxon = "Asteraceae") %>% 
-  add_row(family = "Boraginaceae", genus = "Myosotis", stand.spec= "Myosotis sp.",
+  add_row(family = "Boraginaceae", genus = "Myosotis", stand.spec= "Myosotis",
           country = "Scotland", pollentaxon = NA) %>% 
-  add_row(family = "Caryophyllaceae", genus = "Stellaria", stand.spec= "Stellaria holostea",
-          country = "Scotland", pollentaxon = "Caryophyllaceae") %>% 
-  add_row(family = "Asteraceae", genus = "Taraxacum", stand.spec= "Taraxacum sp.",
+  add_row(family = "Asteraceae", genus = "Taraxacum", stand.spec= "Taraxacum",
           country = "Scotland", pollentaxon = "Asteraceae") %>% 
-  add_row(family = "Blechnaceae", genus = "Blechnum", stand.spec= "Blechnum spicant",
-          country = "Scotland", pollentaxon = "Pteridophyte") %>% 
-  add_row(family = "Asteraceae", genus = "Cirsium", stand.spec= "Cirsium sp.",
+  add_row(family = "Asteraceae", genus = "Cirsium", stand.spec= "Cirsium",
           country = "Scotland", pollentaxon = "Asteraceae") %>% 
   add_row(family = "Poaceae", genus = "Glyceria", stand.spec= "Poaceae",
           country = "Scotland", pollentaxon = "Poaceae") %>% 
-  add_row(family = "Dryopteridaceae", genus = "Dryopteris", stand.spec= "Dryopteris sp. ",
+  add_row(family = "Dryopteridaceae", genus = "Dryopteris", stand.spec= "Dryopteris",
           country = "Scotland", pollentaxon = "Pteridophyte") %>% 
-  add_row(family = "Primulaceae", genus = "Primula", stand.spec= "Primula vulgaris",
-          country = "Scotland", pollentaxon = NA) 
+  add_row(family = "Blechnaceae", genus = "Blechnum", stand.spec = "Blechnum spicant",
+          country = "Scotland", pollentaxon = "Pteridophyte") %>% 
+  add_row(family = "Asteraceae", genus = "Leontondon", stand.spec = "Leontondon",
+          country = "Scotland", pollentaxon = "Asteraceae")
 
-
-  
 saveRDS(specpol, "RDS_files/02_PollenType_species.rds")
