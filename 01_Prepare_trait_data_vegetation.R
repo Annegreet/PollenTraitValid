@@ -24,7 +24,8 @@ plantheight_raw <- read_xlsx("Data/Plant_height.xlsx")
 sla_ldmc_raw <- read_xlsx("Data/LDMC_SLA_dataset.xlsx")
 cn_raw <- read_xlsx("Data/CN_dataset_150.xlsx")
 harm <- read_xlsx("Data/Harmonization_table_species_names.xlsx") %>% 
-  rename(family = fam)
+  rename(family = fam) %>% 
+  mutate(stand.spec = str_remove(stand.spec, " sp."))
 
 ## Plant height ----
 # make plant height data tidy
