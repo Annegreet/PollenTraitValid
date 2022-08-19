@@ -69,7 +69,7 @@ bdm_sp <- bdm_sp %>%
   # remove 0 occurrences
   filter(!abun == 0) %>% 
   # join species codes
-  left_join(bdm_sp_codes, by = c("species_code"= "Species_code")) %>% 
+  left_join(bdm_sp_codes, by = c("species_code" = "Species_code")) %>% 
   # filter for relevant plots
   filter(plot %in% plot_id) 
 
@@ -92,7 +92,7 @@ bdm_sp <- bdm_sp %>%
   # replace by standardized name
   mutate(stand.spec = str_replace_all(binom, regex_pattern)) %>% 
   # remove sp. epiphet
-  mutate(stand.spec = str_remove(stand.spec, pattern = " sp.")) %>% 
+  mutate(stand.spec = str_remove(stand.spec, pattern = " sp\\.")) %>% 
   # select relevant columns, rename
   dplyr::select(sitename = plot, subplot, species_code, family = Family, genus = Genus, 
                 stand.spec, PFT = Functional_group, abun) %>% 
