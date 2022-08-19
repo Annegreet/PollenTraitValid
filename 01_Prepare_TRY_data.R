@@ -23,11 +23,16 @@
 ## Load packages
 if(!require(tidyverse)) install.packages("tidyverse")
 if(!require(data.table)) install.packages("data.table")
+if(!require(LCVP)) install.packages("LCVP")
+if(!require(lcvplants)) install.packages("lcvplants")
+
+
+memory.limit(999999)
 
 ## Traits ----
 trait_raw <-
   fread(
-    "Data/22274_15082022203634/22274.txt",
+    "Data/TRY-request/22284_16082022183406/22284.txt",
     sep = "\t",
     data.table = FALSE,
     stringsAsFactors = FALSE,
@@ -209,28 +214,89 @@ d453 <- trait3 %>% #this dataset has 3 obs per plant, but no way to link leaves 
 trait4 <- trait3 %>%
   filter(!DatasetID == 453) %>%
   bind_rows(d453) %>% 
-  dplyr::select(DatasetID, OrigObsDataID, ObservationID, AccSpeciesName, CleanTraitName, StdValue) %>% 
-  pivot_wider(names_from = CleanTraitName, values_from = StdValue) %>% 
+  dplyr::select(ObsDataID, DatasetID, OrigObsDataID, ObservationID, AccSpeciesName, 
+                CleanTraitName, StdValue) %>% 
+  pivot_wider(id_cols = c(ObsDataID, DatasetID, OrigObsDataID,ObservationID, 
+                          AccSpeciesName),
+              names_from = CleanTraitName, values_from = StdValue) %>% 
   # remove duplicated values
   filter(!(duplicated(.[4:10]) & !is.na(OrigObsDataID)))
 
-saveRDS(trait4, "RDS_files/01_TRY_raw_traits.rds")
+# Save clean TRY data
+saveRDS(trait4, "RDS_files/01_Clean_TRY_data.R")
+# trait4 <- readRDS("RDS_files/01_Cleane_TRY_data.R")
 
-# Pollination and PFT ----
+# add pollen to species translation table ----
+spec <- readRDS("RDS_files/02_PollenType_species.rds") %>% 
+  distinct()
+
+# check for missing species in the trait data
+trait_sp <- trait4$AccSpeciesName %>% unique
+pol_sp <- spec$stand.spec %>% unique()
+
+misspec <-
+  pol_sp[!pol_sp %in% trait_sp] %>%
+  sort %>% unique
+
+# improve matching by standardizing species names
+# lcvp <- lcvp_search(str_subset(trait_sp, pattern = " ")) 
+# saveRDS(lcvp, "RDS_files/01_TRY_species_standardization.rds")
+lcvp <- readRDS("RDS_files/01_TRY_species_standardization.rds")
+lcvp_stand <- lcvp %>% 
+  dplyr::select(Search, Output.Taxon) %>% 
+  mutate(stand.spec = word(Output.Taxon, 1,2))
+trait5 <- trait4 %>% 
+  left_join(lcvp_stand, by = c("AccSpeciesName" = "Search")) 
+
+# check missing species again
+trait_sp <- trait5$stand.spec %>% unique
+misspec <-
+  pol_sp[!pol_sp %in% trait_sp] %>%
+  sort %>% unique %>% length()/length(pol_sp) *100
+misspec
+
+# join with pollen translation table
+trait6 <- trait5 %>% 
+  left_join(spec, by = "stand.spec")
+
+saveRDS(trait6, "RDS_files/01_TRY_raw_traits.rds")
+#trait6 <- readRDS("RDS_files/01_TRY_raw_traits.rds")
+
+sum_trait <- trait6  %>% 
+  filter(!is.na(pollentaxon)) %>% 
+  group_by(pollentaxon) %>% 
+  summarise(nspec = length(unique(stand.spec)),
+    nobs = across(c(LeafN,LeafP,LDMC,SLA,LA,PlantHeight),~sum(!is.na(.))))
+          
+trait_val <- trait6  %>% 
+  filter(!is.na(pollentaxon)) %>% 
+  group_by(pollentaxon) %>% 
+  summarise(across(c(LeafN,LeafP,LDMC,SLA,LA,PlantHeight), 
+                   ~paste(round(mean(., na.rm = TRUE), 1), "+-", round(sd(., na.rm = TRUE), 2))))
+
+                      
+
+
+# Pollination and PFT for vegetation----
 traits <- fread(
-  "Data/21989_20072022132411/21989.txt",
+  "Data/TRY-request/21989_20072022132411/21989.txt",
   sep = "\t",
   data.table = FALSE,
   stringsAsFactors = FALSE,
   strip.white = TRUE,
   drop = c("LastName", "FirstName","Comment", 
            "V28", "Reference", "ValueKindName", "Replicates"))
-spec <- readRDS("RDS_files/02_PollenType_species.rds")
 
-pft_pol <- traits %>% 
-  filter(TraitID %in% c(29, 42)) %>% 
-  dplyr::select(AccSpeciesName, TraitName, OrigValueStr)
+# get species list of vegetation
+dfABUN_a <- readRDS("RDS_files/01_Species_abundance_a.rds")
+dfABUN_bc <- readRDS("RDS_files/01_Species_abundance_bc.rds") %>% 
+  ungroup
+bdm_abun <- readRDS("RDS_files/01_Species_abundance_Swiss.rds") 
 
+spec <- c(dfABUN_a$stand.spec, dfABUN_bc$stand.spec, bdm_abun$stand.spec) %>% 
+  unique 
+
+# create table with plant functional type data
 pft <- traits %>% 
   filter(Dataset %in% c("Reich-Oleksyn Global Leaf N, P Database",
                         " Plant growth form dataset for the New World",
@@ -240,11 +306,8 @@ pft <- traits %>%
   # fix duplicates and mistakes
   mutate(AccSpeciesName = recode(AccSpeciesName, 
                                  `VACCINIUM VITIS-IDAEA` = "Vaccinium vitis-idaea")) %>% 
-  
-  # filter(AccSpeciesName %in% c(spec$species, "VACCINIUM VITIS-IDAEA", "Senecio jacobea",
-  #                              "Persicaria bistorta")) %>% 
-  group_by(AccSpeciesName, Dataset) %>% 
-  # group_by(AccSpeciesName) %>% 
+  group_by(AccSpeciesName) %>% 
+  # generalize pft values
   summarise(pft = paste(unique(OrigValueStr), collapse = ", ")) %>% 
   mutate(growthform = case_when(str_detect(pft, "tree|Tree") ~ 'tree',
                                 str_detect(pft, "shrub|Shrub") ~ 'shrub',
@@ -253,6 +316,7 @@ pft <- traits %>%
                                 str_detect(pft, "fern|Fern") ~ 'fern')) %>% 
   filter(!is.na(growthform)) %>% 
   distinct(AccSpeciesName, growthform) %>% 
+  # fix mistakes
   filter(!(AccSpeciesName == "Achillea millefolium" & growthform == "shrub") ) %>% 
   filter(!(AccSpeciesName == "Agrostis capillaris" & growthform == "herb" )) %>% 
   filter(!(AccSpeciesName == "Anthoxanthum odoratum" & growthform == "herb")) %>% 
@@ -303,28 +367,76 @@ pft <- traits %>%
   filter(!(AccSpeciesName == "Fragaria vesca" & growthform == "tree")) %>% 
   filter(!(AccSpeciesName == "Lonicera nigra" & growthform == "tree")) %>% 
   filter(!(AccSpeciesName == "Taraxacum campylodes" & growthform == "tree")) %>% 
-  filter(!(AccSpeciesName == "Juncus effusus" & growthform == "tree"))
+  filter(!(AccSpeciesName == "Juncus effusus" & growthform == "tree")) %>% 
+  # add missing
+  add_row(AccSpeciesName = c("Holcus lanatus","Molinia caerulea",
+                             "Carex","Festuca",
+                             "Jacobaea vulgaris","Trichophorum caespitosum",
+                             "Trientalis europaea","Salix",
+                             "Taraxacum","Primula acaulis",
+                             "Equisetum","Hypochaeris",
+                             "Myosotis","Cirsium",
+                             "Equisetum sylvaticum","Glyceria fluitans",
+                             "Lonicera nigra","Unindentified",
+                             "Hedera helix","Pilosella cymosa",
+                             "Anemone hepatica","Vicia sepium",
+                             "Ranunculus lanuginosus","Alchemilla vulgaris",
+                             "Leontondon","Mutellina purpurea",
+                             "Cerastium","Juncus",
+                             "Ranunculus tuberosus","Soldanella alpina",
+                             "Clematis vitalba","Bistorta officinalis",
+                             "Vaccinium nitens","Euphrasia minima",
+                             "Ranunculus","Polygaloides chamaebuxus"),
+          growthform = c("grass","grass", "grass", "grass", "herb",
+                         "grass","herb", "shrub", "herb", "herb",
+                         "fern", "herb", "herb", "herb", "fern",
+                         "grass", "shrub", NA, "shrub", "herb",
+                         "herb","herb","herb","herb","herb",
+                         "herb","herb","grass","herb","herb",
+                         "herb","herb","shrub","herb","herb",
+                         "herb")
+  )
+
 
 polmode <- traits %>% 
   filter(TraitName == "Pollination syndrome") %>% 
-  filter(AccSpeciesName %in% c(spec$species, "VACCINIUM VITIS-IDAEA", "Senecio jacobea",
-                               "Persicaria bistorta")) %>% 
+  mutate(AccSpeciesName = recode(AccSpeciesName, 
+                                 `VACCINIUM VITIS-IDAEA` = "Vaccinium vitis-idaea")) %>% 
   group_by(AccSpeciesName) %>% 
-  # group_by(AccSpeciesName) %>% 
   summarise(polination = paste(unique(OrigValueStr), collapse = ", ")) %>% 
   mutate(polmode = case_when(str_detect(polination, "wind") ~ "wind",
                              !str_detect(polination, "wind") ~ "not wind")) %>% 
-  distinct(AccSpeciesName, polmode)
+  distinct(AccSpeciesName, polmode) %>% 
+  # add missing
+  add_row(AccSpeciesName = c("Holcus lanatus","Molinia caerulea",
+                             "Carex","Festuca",
+                             "Jacobaea vulgaris","Trichophorum caespitosum",
+                             "Trientalis europaea","Salix",
+                             "Taraxacum","Primula acaulis",
+                             "Equisetum","Hypochaeris",
+                             "Myosotis","Cirsium",
+                             "Equisetum sylvaticum","Glyceria fluitans",
+                             "Lonicera nigra","Unindentified",
+                             "Hedera helix","Pilosella cymosa",
+                             "Anemone hepatica","Vicia sepium",
+                             "Ranunculus lanuginosus","Alchemilla vulgaris",
+                             "Leontondon","Mutellina purpurea",
+                             "Cerastium","Juncus",
+                             "Ranunculus tuberosus","Soldanella alpina",
+                             "Clematis vitalba","Bistorta officinalis",
+                             "Vaccinium nitens","Euphrasia minima",
+                             "Ranunculus","Polygaloides chamaebuxus"),
+          polmode = c("wind","wind", "wind", "wind", "not wind",
+                         "wind","not wind", "wind", "not wind", "not wind",
+                         "wind", "not wind", "not wind", "not wind", "wind",
+                         "wind", "not wind", NA, "not wind", "not wind",
+                         "not wind","not wind","not wind","not wind","not wind",
+                         "not wind","not wind","wind","not wind","not wind",
+                         "not wind","not wind","not wind","not wind","not wind",
+                         "not wind")
+  )
 
 df <- full_join(pft, polmode, by = "AccSpeciesName") %>% 
-  full_join(spec, by = c("AccSpeciesName" = "species")) %>% 
-  mutate(polmode = case_when(AccSpeciesName == "Poaceae" ~ "wind",
-                             AccSpeciesName == "Asteraceae" ~ "not wind",
-                             is.na(polmode) & growthform == "fern" ~ "wind",
-                             is.na(polmode) & family == "Asteraceae" ~ "not wind",
-                             AccSpeciesName == "Vaccinium vitis-idaea" ~ "not wind",
-                             TRUE ~ polmode),
-         genus = case_when(AccSpeciesName == "Poaceae" & !is.na(genus) ~ NA)) %>% 
   distinct()
 saveRDS(df, "RDS_files/Polmode_pft_vegetation.rds")
 
