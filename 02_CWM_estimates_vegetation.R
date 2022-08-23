@@ -25,9 +25,6 @@ if(!require(mcmc)) install.packages("mcmc")
 if(!require(coda)) install.packages("coda")
 if(!require(Hmisc)  )install.packages("Hmisc") 
 if(!require(furrr))  install.packages("furrr")
-if(!require(LCVP)) install.packages("LCVP")
-if(!require(lcvplants)) install.packages("lcvplants")
-if(!require(FD)) install.packages("FD")
 
 set.seed(1)
 
@@ -62,11 +59,10 @@ lTrait <- list(PlantHeight = plantheight,
                LeafC = c,
                LeafN = n)
 # Switzerland ----
-bdm_traits <- readRDS("RDS_files/01_Traits_Swiss.rds") %>% 
-  rename(stand.spec = binom)
+bdm_traits <- readRDS("RDS_files/01_Traits_Swiss.rds")
 
 # Gapdata ---- 
-dfTRAIT <- readRDS("RDS_files/02_Gapfilled_traits.rds")
+dfTRAIT <- readRDS("RDS_files/01_TRY_raw_traits.rds")
 
 # Pollination and PFT ----
 dfPFT <- readRDS("RDS_files/Polmode_pft_vegetation.rds")
@@ -84,18 +80,19 @@ zoneA <- dfABUN_a %>%
   # select plots that are comparable with Switzerland
   filter(distance %in% c("0 meter", "1.5-3 meter")) %>%
   # join with pft and polmode data
-  left_join(dfPFT[,c("AccSpeciesName", "growthform", "polmode")], 
+  left_join(dfPFT, 
             by = c("stand.spec" = "AccSpeciesName")) %>% 
-  rename(family = fam)
+  rename(family = fam) %>% 
+  ungroup
 zoneB <- dfABUN_bc %>% 
   # join with pft and polmode data
-  left_join(dfPFT[,c("AccSpeciesName", "growthform", "polmode")], 
+  left_join(dfPFT, 
             by = c("stand.spec" = "AccSpeciesName")) %>% 
   ungroup() %>% 
   dplyr::select(sitename, stand.spec, genus, family = fam, abun = spec_abun_b, growthform, polmode)
 zoneC <- dfABUN_bc %>% 
   # join with pft and polmode data
-  left_join(dfPFT[,c("AccSpeciesName", "growthform", "polmode")], 
+  left_join(dfPFT, 
             by = c("stand.spec" = "AccSpeciesName")) %>% 
   ungroup %>% 
   dplyr::select(sitename, stand.spec, genus, family = fam, abun = spec_abun_c, growthform, polmode)
@@ -105,7 +102,7 @@ selectedtrait <- "PlantHeight"
 selectedabun <- "zoneB"
 selectedpolmode <- unique(dfPFT$polmode)[2]
 selectedpft <- unique(dfPFT$growthform)
-selectedtaxres <- "stand.spec"
+selectedtaxres <- "genus"
 
 trsh <- c("tree", "shrub")
 herb <- c("herb", "grass", "fern")
@@ -114,12 +111,33 @@ wind <- "wind"
 nowind <- "not wind"
 allpol <- c("wind", "not wind", NA)
 
+# Create joining column for trait data (to allow match for taxa 
+# that are not identified to species level)
+veg_sp <- lABUN %>% 
+  purrr::map(., ~pull(.,stand.spec)) %>% 
+  unlist %>% unique
+lTrait <-
+  lTrait %>% 
+  purrr::map(., ~mutate(., stand.spec = 
+                          case_when(stand.spec %in% veg_sp ~ stand.spec,
+                                    genus %in% veg_sp ~ genus,
+                                    family %in% veg_sp ~ family)
+           )
+  ) 
+dfTRAIT <- 
+  dfTRAIT %>% 
+  mutate(., stand.spec = case_when(stand.spec %in% veg_sp ~ stand.spec,
+                                   genus %in% veg_sp ~ genus,
+                                   family %in% veg_sp ~ family)
+                        )
+             
 # Scotland----
-if(0){ 
-cwm_func <- function(selectedabun, selectedtrait,selectedtaxres, selectedpolmode, selectedpft){
+if(1){ 
+cwm_func <- function(selectedabun, selectedtrait, selectedtaxres, selectedpolmode, 
+                     selectedpft){
   taxa <- lABUN %>% 
     pluck(selectedabun) %>% 
-    arrange(sitename,selectedtaxres) %>% 
+    arrange(sitename, selectedtaxres) %>% 
     # optional filter for polmode and pft
     filter(polmode %in% selectedpolmode) %>% 
     filter(growthform %in% selectedpft) %>% 
@@ -127,9 +145,10 @@ cwm_func <- function(selectedabun, selectedtrait,selectedtaxres, selectedpolmode
     pull(selectedtaxres) %>% 
     unique()
   
+  
   Ab <- lABUN %>% 
     pluck(selectedabun) %>% 
-    arrange(sitename,selectedtaxres) %>% 
+    arrange(sitename, selectedtaxres) %>% 
     # optional filter for polmode and pft
     filter(polmode %in% selectedpolmode) %>% 
     filter(growthform %in% selectedpft) %>% 
@@ -146,7 +165,7 @@ cwm_func <- function(selectedabun, selectedtrait,selectedtaxres, selectedpolmode
     ungroup() 
   
   # save site names with data
-  sitenames <- Ab %>% pull(sitename) 
+  sitenames <- Ab %>% pull(sitename) %>% unique
   # get order of taxa
   taxorder <- colnames(Ab)[-1]
   
@@ -170,10 +189,11 @@ cwm_func <- function(selectedabun, selectedtrait,selectedtaxres, selectedpolmode
   # find in gapdata
   TRY <- dfTRAIT %>% 
     filter(country == "Scotland") %>%
-    dplyr::select(tax = all_of(selectedtaxres), all_of(selectedtrait)) %>% 
-    arrange(tax) %>% 
-    filter(tax %in% c(missingtax, nobs)) 
-    
+    dplyr::select(tax = all_of(selectedtaxres), 
+                  all_of(selectedtrait)) %>% 
+    filter(tax %in% missingtax) %>% 
+    arrange(tax) 
+  
   Trait <- lTrait %>%
     pluck(selectedtrait) %>%
     dplyr::select(tax = all_of(selectedtaxres), all_of(selectedtrait)) %>% 
@@ -181,6 +201,7 @@ cwm_func <- function(selectedabun, selectedtrait,selectedtaxres, selectedpolmode
     bind_rows(TRY) %>% 
     filter(tax %in% taxa) %>%
     arrange(match(tax, taxorder)) %>% # order same way as abundance data
+    drop_na() %>% 
     pull(selectedtrait) 
   
   Tax <- lTrait %>%
@@ -191,6 +212,7 @@ cwm_func <- function(selectedabun, selectedtrait,selectedtaxres, selectedpolmode
     bind_rows(TRY) %>% 
     filter(tax %in% taxa) %>%
     arrange(match(tax, taxorder)) %>% # order same way as abundance data
+    drop_na() %>% 
     pull(tax) %>% 
     as.factor()
 
@@ -211,27 +233,34 @@ cwm_func <- function(selectedabun, selectedtrait,selectedtaxres, selectedpolmode
   
   # initial values
   mean.tax <- list(chain1 = rep(min(Trait), Ntax), 
-                   chain2 = rep(max(Trait), Ntax))
-  tau.tax <- list(chain1 = rep(1/(SD*0.01)^2,Ntax), 
-                  chain2 = rep(1/(SD*100)^2, Ntax))
+                   chain2 = rep(max(Trait), Ntax)
+                   # chain3 = rep(0, Ntax),
+                   # chain4 = rep(max(Trait)*10, Ntax)
+                   )
+  tau.tax <- list(chain1 = rep(1/(SD*0.01)^2, Ntax), 
+                  chain2 = rep(1/(SD*100)^2, Ntax)
+                  # chain3 = rep(1/(SD*0.001)^2, Ntax),
+                  # chain4 = rep(1/(SD*0.0001)^2, Ntax)
+                  )
   
-  results <- run.jags("CWM_log.txt", n.chains = 2,monitor = "cwm")
+  results <- run.jags("CWM_log.txt", n.chains = 2,
+                      burnin = 6000, sample = 15000, monitor = "cwm")
   
   # trace plots
   plot(results, file =                          
-         paste0("Convergence_diagnostics/Conv_", deparse(substitute(abun)),"_Scotland_", selectedtrait,
-                "_", selectedtaxres, "_", selectedpolmode,"_",selectedpft, ".pdf")
+         paste0("Convergence_diagnostics/Conv_", selectedabun,"_Scotland_", selectedtrait,
+                "_", selectedtaxres, "_", paste(selectedpolmode, collapse = ""),"_",paste(selectedpft, collapse = ""), ".pdf")
   )
   
   # gelman plots
-  pdf(paste0("Convergence_diagnostics/Gelman_", deparse(substitute(abun)),"_Scotland_", selectedtrait,
-             "_", selectedtaxres, "_", selectedpolmode,"_",selectedpft, ".pdf")
+  pdf(paste0("Convergence_diagnostics/Gelman_", selectedabun,"_Scotland_", selectedtrait,
+             "_", selectedtaxres, "_", paste(selectedpolmode, collapse = ""),"_",paste(selectedpft, collapse = ""), ".pdf")
   )
   gelman.plot(results, ask = FALSE)
   dev.off()
   
   res <- as.data.frame(summary(results)) %>% 
-    mutate(sitenames = sitenames,
+    mutate(sitename = sitenames,
     trait = selectedtrait,
     growthform = case_when(all(selectedpft == trsh) ~ "trsh",
                           all(selectedpft == herb) ~ "herb",
@@ -242,9 +271,9 @@ cwm_func <- function(selectedabun, selectedtrait,selectedtaxres, selectedpolmode
     taxres = selectedtaxres,
     zone = selectedabun)
   
-  saveRDS(res, paste0("RDS_files/03_CWM_estimates_", deparse(substitute(abun)),"_Scotland_", selectedtrait,
+  saveRDS(res, paste0("RDS_files/03_CWM_estimates_",selectedabun,"_Scotland_", selectedtrait,
                       "_", selectedtaxres, "_", 
-                      paste(selectedpolmode,collapse = ""),"_",paste(selectedpft,collapse = ""),".rds"))
+                      paste(selectedpolmode, collapse = ""),"_",paste(selectedpft,collapse = ""),".rds"))
 }
 
 ## Zone A
@@ -307,7 +336,7 @@ furrr::future_map(c("PlantHeight", "LA", "SLA"),
 
 ## Zone B
 # all 
-plan(multisession(workers = ))
+plan(multisession(workers = 2))
 furrr::future_map(c("PlantHeight", "LA", "SLA"),
                   ~cwm_func(selectedabun = "zoneB", 
                             selectedtrait = .,
@@ -425,9 +454,10 @@ furrr::future_map(c("PlantHeight", "LA", "SLA"),
 
 # Switzerland ----
 if(1){ 
-  cwm_func_swiz <- function(selectedtrait,selectedtaxres, selectedpolmode, selectedpft){
+  cwm_func_swiz <- function(selectedtrait, selectedtaxres, selectedpolmode, selectedpft){
   taxa <- bdm_abun %>% 
-    arrange(sitename,selectedtaxres) %>% 
+    filter(stand.spec == "Unindentified") %>% 
+    arrange(sitename, selectedtaxres) %>% 
     # optional filter for polmode and pft
     filter(polmode %in% selectedpolmode) %>% 
     filter(growthform %in% selectedpft) %>% 
@@ -435,8 +465,11 @@ if(1){
     pull(selectedtaxres) %>% 
     unique()
   
+  # fam <- na.exclude(unique(bdm_abun$family[is.na(bdm_abun$genus)]))
+  
   Ab <- bdm_abun %>%
-    arrange(sitename,selectedtaxres) %>% 
+    filter(!stand.spec == "Unindentified") %>% 
+    arrange(sitename, selectedtaxres) %>% 
     # optional filter for polmode and pft
     filter(polmode %in% selectedpolmode) %>% 
     filter(growthform %in% selectedpft) %>% 
@@ -524,18 +557,20 @@ if(1){
   # trace plots
   plot(results, file =                          
          paste0("Convergence_diagnostics/Conv_Switzerland_", selectedtrait,
-                "_", selectedtaxres, "_", selectedpolmode,"_",selectedpft, ".pdf")
+                "_", selectedtaxres, "_", paste(selectedpolmode, collapse = ""),"_",
+                paste(selectedpft, collapse = ""), ".pdf")
   )
   
   # gelman plots
   pdf(paste0("Convergence_diagnostics/Gelman_Switzerland_", selectedtrait,
-             "_", selectedtaxres, "_", selectedpolmode,"_",selectedpft, ".pdf")
+             "_", selectedtaxres, "_", paste(selectedpolmode, collapse = ""),"_",
+             paste(selectedpft, collapse = ""), ".pdf")
   )
   gelman.plot(results, ask = FALSE)
   dev.off()
   
   res <- as.data.frame(summary(results))%>% 
-    mutate(sitenames = sitenames,
+    mutate(sitename = sitenames,
            trait = selectedtrait,
            growthform = case_when(all(selectedpft == trsh) ~ "trsh",
                                   all(selectedpft == herb) ~ "herb",
