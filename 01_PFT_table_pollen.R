@@ -1,6 +1,6 @@
 ## ---------------------------
 ##
-## Script name: Create_PFT_table
+## Script name: PFT_table_pollen
 ##
 ## Purpose of script: Create pollination mode and pft table for pollen data
 ##
