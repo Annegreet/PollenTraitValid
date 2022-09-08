@@ -23,7 +23,7 @@ if(!require(data.table)) install.packages("data.table")
 
 # Pollination and PFT for vegetation----
 traits <- fread(
-  "Data/TRY-request/21989_20072022132411/21989.txt",
+  "Data/TRY-request/22386_31082022154852/22386.txt",
   sep = "\t",
   data.table = FALSE,
   stringsAsFactors = FALSE,
@@ -54,8 +54,8 @@ pft <- traits %>%
   # generalize pft values
   summarise(pft = paste(unique(OrigValueStr), collapse = ", ")) %>% 
   mutate(growthform = case_when(str_detect(pft, "tree|Tree") ~ 'tree',
-                                str_detect(pft, "shrub|Shrub") ~ 'shrub',
                                 str_detect(pft, "herb|Herb|Forb") ~ 'herb',
+                                str_detect(pft, "shrub|Shrub") ~ 'shrub',
                                 str_detect(pft, "grass|Grass|Graminoid|graminoid") ~ 'grass',
                                 str_detect(pft, "fern|Fern") ~ 'fern')) %>% 
   filter(!is.na(growthform)) %>% 
@@ -136,7 +136,11 @@ pft <- traits %>%
                              "Corylus avellana","Crataegus laevigata", 
                              "Dactylis glomerata", "Deschampsia flexuosa", 
                              "Juniperus communis", "Lolium perenne","Luzula sylvatica",
-                             "Orthilia secunda","Pteridium aquilinum", "Rubus caesius"),
+                             "Orthilia secunda","Pteridium aquilinum", "Rubus caesius",
+                             "Juncus bufonius", "Larix decidua", "Lathyrus palustris",
+                             "Galium odoratum","Galium verum", "Geranium robertianum",
+                             "Clematis vitalba", "Helianthemum salicifolium",
+                             "Rhinanthus glacialis", "Potentilla brevifolia"),
           growthform = c("grass","grass", "grass", "grass", "herb",
                          "grass","herb", "shrub", "herb", "herb",
                          "fern", "herb", "herb", "herb", "fern",
@@ -147,8 +151,15 @@ pft <- traits %>%
                          "herb", "grass", "grass", "grass",
                          "fern", "shrub", "shrub", "grass",
                          "grass", "shrub","grass","grass", "herb",
-                         "fern", "shrub")
-  )
+                         "fern", "shrub", "grass", "tree", "herb",
+                         "herb","herb","herb","herb", "herb", "herb",
+                         "herb")
+  ) %>% 
+  # Ericaceae specified as herb in pollen data
+  mutate(growthform = case_when(AccSpeciesName %in% c("Calluna vulgaris", 
+                                                      "Erica cinerea",
+                                                      "Erica tetralix") ~ "herb",
+                                TRUE ~ growthform))
 
 
 polmode <- traits %>% 
@@ -180,7 +191,10 @@ polmode <- traits %>%
                              "Vaccinium nitens","Euphrasia minima",
                              "Ranunculus","Polygaloides chamaebuxus",
                              "Asteraceae", "Dryopteris","Poaceae",
-                             "Selaginella selaginoides"),
+                             "Selaginella selaginoides",
+                             "Juncus bufonius", "Larix decidua", "Lathyrus palustris",
+                             "Potentilla brevifolia","Carex curvula", "Lycopodium annotinum",
+                             "Trifolium alpinum"),
           polmode = c("wind","wind", "wind", "wind", "not wind",
                       "wind","not wind", "wind", "not wind", "not wind",
                       "wind", "not wind", "not wind", "not wind", "wind",
@@ -188,12 +202,16 @@ polmode <- traits %>%
                       "not wind","not wind","not wind","not wind","not wind",
                       "not wind","not wind","wind","not wind","not wind",
                       "not wind","not wind","not wind","not wind","not wind",
-                      "not wind", "not wind","wind","wind","wind")
-  )
+                      "not wind", "not wind","wind","wind","wind", "wind",
+                      "wind", "not wind", "not wind", "wind", "wind","not wind")) %>% 
+  # Ericaceae specified as non wind pollinated in pollen data
+  mutate(polmode = case_when(AccSpeciesName %in% c("Calluna vulgaris")~ "not wind",
+                                TRUE ~ polmode))
 
-df <- full_join(pft, polmode, by = "AccSpeciesName") %>% 
+
+dfPFT <- full_join(pft, polmode, by = "AccSpeciesName") %>% 
   distinct()
-saveRDS(df, "RDS_files/Polmode_pft_vegetation.rds")
+saveRDS(dfPFT, "RDS_files/Polmode_pft_vegetation.rds")
 
 # Make summary table per site -----
 zoneA <- dfABUN_a %>%
@@ -205,7 +223,8 @@ zoneA <- dfABUN_a %>%
             by = c("stand.spec" = "AccSpeciesName")) %>% 
   rename(family = fam) %>% 
   ungroup %>% 
-  mutate(zone = "zoneA")
+  mutate(zone = "zoneA",
+         country = "Scotland")
 zoneB <- dfABUN_bc %>% 
   # join with pft and polmode data
   left_join(dfPFT, 
@@ -213,7 +232,8 @@ zoneB <- dfABUN_bc %>%
   ungroup() %>% 
   dplyr::select(sitename, stand.spec, genus, family = fam,
                 abun = spec_abun_b, growthform, polmode)%>% 
-  mutate(zone = "zoneB")
+  mutate(zone = "zoneB",
+         country = "Scotland")
 zoneC <- dfABUN_bc %>% 
   # join with pft and polmode data
   left_join(dfPFT, 
@@ -221,14 +241,41 @@ zoneC <- dfABUN_bc %>%
   ungroup %>% 
   dplyr::select(sitename, stand.spec, genus, family = fam, 
                 abun = spec_abun_c, growthform, polmode) %>% 
-  mutate(zone = "zoneC")
-# BDM <- bdm_abun %>% 
-#   dplyr::select(sitename, stand.spec, genus, family, abun, 
-#                 growthform, polmode) %>% 
-#   mutate(sitename = as.character(sitename)) %>% 
-#   mutate(zone = "BDM")
+  mutate(zone = "zoneC",
+         country = "Scotland")
+bdm_zoneA <- bdm_abun %>%
+  # join with pft and polmode data
+  left_join(dfPFT, 
+            by = c("stand.spec" = "AccSpeciesName")) %>% 
+  dplyr::select(sitename, stand.spec, genus, family, abun,
+                growthform, polmode) %>%
+  mutate(sitename = as.character(sitename)) %>%
+  mutate(zone = "zoneA",
+         country = "Switzerland")
+bdm_abunbc <- readRDS("RDS_files/01_Species_abundance_zoneBC_swiss.rds")
+bdm_zoneB <- bdm_abunbc %>%
+  # join with pft and polmode data
+  left_join(dfPFT, 
+            by = c("stand.spec" = "AccSpeciesName")) %>% 
+  ungroup() %>% 
+  dplyr::select(sitename, stand.spec, genus, family, abun = spec_abun_b,
+                growthform, polmode) %>%
+  mutate(sitename = as.character(sitename)) %>%
+  mutate(zone = "zoneB",
+         country = "Switzerland")
+bdm_zoneC <- bdm_abunbc %>%
+  # join with pft and polmode data
+  left_join(dfPFT, 
+            by = c("stand.spec" = "AccSpeciesName")) %>% 
+  ungroup() %>% 
+  dplyr::select(sitename, stand.spec, genus, family, abun = spec_abun_c,
+                growthform, polmode) %>%
+  mutate(sitename = as.character(sitename)) %>%
+  mutate(zone = "zoneC",
+         country = "Switzerland")
 
-dfABUN  <- bind_rows(zoneA, zoneB, zoneC)
+dfABUN  <- bind_rows(zoneA, zoneB, zoneC,
+                     bdm_zoneA, bdm_zoneB,bdm_zoneC)
 
 sum_polmode <- dfABUN %>% 
   group_by(zone, sitename, stand.spec) %>% 
@@ -256,5 +303,5 @@ sum <- dfABUN %>%
   left_join(sum_polmode, by = c("zone", "sitename")) %>% 
   replace_na(list(Woody = 0)) %>% 
   mutate(across(where(is.numeric), ~round(.,2)*100))
+saveRDS(sum, "RDS_files/01_Percentage_cover_pft.rds")
 
-rm(list=setdiff(ls(), "sum"))
