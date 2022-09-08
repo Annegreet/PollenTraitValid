@@ -27,7 +27,7 @@ if(!require(readxl)) install.packages("readxl")
 set.seed(1)
 
 # Scotland ----
-pollen_raw <- read.csv("Data/Pollen_count.csv", skip = 1)
+pollen_raw <- read.csv("Data/Pollen_count_Scotland-checked.csv", skip = 1, sep = ";")
 ppe <- read_xlsx("Data/Githumbi_2022_RPP.xlsx")
 polmode <- readRDS("RDS_files/01_Pollination_mode.rds")
 
@@ -54,7 +54,8 @@ dfPOL <- pollen_raw %>%
            recode(Caryophyllaccea = "Caryophyllaceae",
                   Lilaceae = "Liliaceae",
                   "Juniperus communis" = "Juniperus")
-         )
+         ) %>% 
+  filter(!is.na(count))
 
 # percentage data with missing ppe's 
 missing_ppe_scot <- dfPOL %>%
@@ -112,7 +113,7 @@ saveRDS(dfPOL, "RDS_files/01_Pollen_data_Scot.rds")
 
 # Switzerland ----
 # read in pollen data
-dfPOL <- read.csv("Data/Pollen_count_Switserland.csv", skip = 1) %>% 
+dfPOL <- read.csv("Data/Pollen_count_Switserland-checked.csv", skip = 1, sep = ";") %>% 
   filter(!Key.index == "---") %>% # filter empty rows
   filter(!Sample.name == "---") %>% 
   pivot_longer(cols = c(starts_with("X"),"unknown"), # convert to long format
