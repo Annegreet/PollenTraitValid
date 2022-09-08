@@ -8,11 +8,11 @@ model {
     }
     for (l in 1:Ntax){
     # vague priors taxon level
-      mean.tax[l] ~ dnorm(0, 10^-4)
-      tau.tax[l] ~ dgamma(0.001, 0.001)
+      mean.tax[l] ~ dnorm(Mean[l], (1/SD[l]^2)*1000)
+      tau.tax[l] ~ dunif((1/SD[l]^2)/1000, (1/SD[l]^2)*1000)
       sd.tax[l] <- sqrt(1/tau.tax[l])
     }
-    #data# N, Nsites, Trait, Tax, Ntax, Ab
+    #data# N, Nsites, Trait, Tax, Ntax, Ab, Mean, SD
     #monitor# mean.tax, sd.tax, cwm
-    #inits# mean.tax, tau.tax
+    #inits# mean.tax
   }
