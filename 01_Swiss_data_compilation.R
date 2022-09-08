@@ -39,6 +39,10 @@ plot_id <- bdm_pollen %>%
 # check sites 
 bdm_meta <- bdm_meta %>% 
   filter(aID_STAO %in% plot_id)
+ 
+# bdm_meta <- bdm_meta %>% 
+#   filter(aID_STAO %in% bdm_sp$plot)
+# write.csv(bdm_meta, file = "Data/Swiss_LC/all_BDM_plots_coord.csv")
 
 # Prepare sp code for merge with trait and abundance data
 bdm_sp_codes <- bdm_sp_codes %>% 
@@ -54,7 +58,10 @@ bdm_sp_codes <- bdm_sp_codes %>%
                         `Helix hedera` = "Hedera helix",
                         `Leontondon helveticus` = "Leontodon helveticus",
                         `Leotondon Autumnalis` = "Leontodon autumnalis",
-                        `Cirisium spinosissimum` = "Cirsium spinosissimum"),
+                        `Cirisium spinosissimum` = "Cirsium spinosissimum",
+                        `vaccinium myrtillus` = "Vaccinium myrtillus",
+                        `vaccinium vitis idaea` = "Vaccinium vitis-idaea",
+                        `Anthoxanthum odoratum aggr.` = "Anthoxanthum odoratum"),
          Species_code = recode(Species_code, 
                                alcxan = "alcvul", # Alchemilla vulgaris current code alcxan is not in species or trait data, alcvul is
                                soldal = "solalp" # Soldanella alpinia idem
@@ -70,8 +77,7 @@ bdm_sp <- bdm_sp %>%
   filter(!abun == 0) %>% 
   # join species codes
   left_join(bdm_sp_codes, by = c("species_code" = "Species_code")) %>% 
-  # filter for relevant plots
-  filter(plot %in% plot_id) 
+  dplyr::select(plot, subplot, abun, binom, Species, species_code)
 
 # standardize species names
 spec <- bdm_sp %>% 
@@ -82,10 +88,11 @@ spec <- bdm_sp %>%
 lcvp <- lcvp_search(spec) # find synonyms
 
 synonyms <- lcvp %>% 
-  dplyr::select(binom = Search, stand_spec = Output.Taxon) %>% 
-  mutate(stand_spec = word(stand_spec, 1, 2)) # drop authorship
+  dplyr::select(binom = Search, stand.spec = Output.Taxon, family = Family) %>% 
+  mutate(stand.spec = word(stand.spec, 1, 2),# drop authorship
+         genus = word(stand.spec,1)) 
 regex_pattern <-
-  setNames(synonyms$stand_spec,
+  setNames(synonyms$stand.spec,
            paste0("\\b", synonyms$binom, "\\b"))
 
 bdm_sp <- bdm_sp %>% 
@@ -93,9 +100,6 @@ bdm_sp <- bdm_sp %>%
   mutate(stand.spec = str_replace_all(binom, regex_pattern)) %>% 
   # remove sp. epiphet
   mutate(stand.spec = str_remove(stand.spec, pattern = " sp\\.")) %>% 
-  # select relevant columns, rename
-  dplyr::select(sitename = plot, subplot, species_code, family = Family, genus = Genus, 
-                stand.spec, PFT = Functional_group, abun) %>% 
   # code unidentified and no plant categories
   mutate(stand.spec = case_when(!is.na(stand.spec) ~ stand.spec,
                            species_code %in% c("FO","GR", "CR") ~ "Unindentified",
@@ -106,7 +110,9 @@ bdm_sp <- bdm_sp %>%
                            str_detect(species_code, pattern = "[:digit:]") ~ "Unindentified",
                            species_code %in% c("NA", "lonneg","rubfru","giumon","soraur") ~ "Unindentified" # missing species code
                                 )
-         )
+         ) %>% 
+  # select relevant columns, rename
+  dplyr::select(sitename = plot, subplot,stand.spec, abun)
 
 # calculate plant abundance
 bdm_sp <- bdm_sp %>% 
@@ -117,16 +123,25 @@ bdm_sp <- bdm_sp %>%
   summarise(abun = sum(abun)) %>% 
   mutate(abun = abun/sum(abun)) %>% 
   # add family and genus info again
-  left_join(bdm_sp_codes, by = c("stand.spec" = "binom"))
+  left_join(synonyms, by = c("stand.spec")) %>% 
+  select(-binom) %>% 
+  mutate(genus = case_when(is.na(genus) & !stand.spec == "Unindentified" & !str_ends(stand.spec, pattern = "ceae") &
+                           str_detect(stand.spec, pattern = " ", negate = TRUE) ~ stand.spec,
+                           TRUE ~ genus),
+         family = case_when(is.na(family) & str_ends(stand.spec, pattern = "ceae") ~ stand.spec,
+                            is.na(family) & genus == "Carex" ~ "Cyperaceae",
+                            is.na(family) & genus == "Juncus" ~ "Juncaceae",
+                            is.na(family) & genus == "Leontondon" ~ "Asteraceae",
+                            is.na(family) & genus == "Dryopteris" ~ "Dryopteridaceae",
+                            is.na(family) & genus == "Cerastium" ~ "Caryophyllaceae",
+                            is.na(family) & genus == "Ranunculus" ~ "Ranunculaceae",
+                            TRUE ~ family))
 
 saveRDS(bdm_sp, "RDS_files/01_Species_abundance_Swiss.rds")
 
-
 ## ---- Traits
 bdm_traits <- bdm_traits %>% 
-  left_join(bdm_sp_codes, by = c("species_code" = "Species_code")) %>% 
-  # filter for relevant plots
-  filter(plot %in% plot_id)
+  left_join(bdm_sp_codes, by = c("species_code" = "Species_code"))
 bdm_traits <- bdm_traits %>% 
   # replace by standardized name
   mutate(stand.spec = str_replace_all(binom, regex_pattern)) %>% 
@@ -145,7 +160,9 @@ bdm_traits <- bdm_traits %>%
   dplyr::select(species_code, family = Family, genus = Genus, 
                 stand.spec, PFT = Functional_group,  
                 LA = area_mg, SLA = SLA_mm2_mg, PlantHeight = height_cm) %>% 
-  mutate(LA = LA * 100) #cm2 to mm2
+  mutate(LA = LA * 100, #cm2 to mm2
+         PlantHeight = case_when(PFT == "TR" ~ PlantHeight*100, # when the functional group is tree, convert m to cm
+                                 TRUE ~ PlantHeight))
 saveRDS(bdm_traits, "RDS_files/01_Traits_Swiss.rds")
 
 
