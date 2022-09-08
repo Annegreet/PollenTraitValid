@@ -26,7 +26,7 @@ if(!require(data.table)) install.packages("data.table")
 if(!require(LCVP)) install.packages("LCVP")
 if(!require(lcvplants)) install.packages("lcvplants")
 
-
+# increase memory limit
 memory.limit(999999)
 
 ## Traits ----
@@ -220,11 +220,9 @@ trait4 <- trait3 %>%
                           AccSpeciesName),
               names_from = CleanTraitName, values_from = StdValue) %>% 
   # remove duplicated values
-  filter(!(duplicated(.[4:10]) & !is.na(OrigObsDataID)))
-
-# Save clean TRY data
-saveRDS(trait4, "RDS_files/01_Clean_TRY_data.R")
-# trait4 <- readRDS("RDS_files/01_Cleane_TRY_data.R")
+  filter(!(duplicated(.[4:10]) & !is.na(OrigObsDataID))) %>% 
+  # conver plantheight from m to cm
+  mutate(PlantHeight = PlantHeight * 100)
 
 # add pollen to species translation table ----
 spec <- readRDS("RDS_files/02_PollenType_species.rds") %>% 
@@ -243,10 +241,15 @@ misspec <-
 # saveRDS(lcvp, "RDS_files/01_TRY_species_standardization.rds")
 lcvp <- readRDS("RDS_files/01_TRY_species_standardization.rds")
 lcvp_stand <- lcvp %>% 
-  dplyr::select(Search, Output.Taxon) %>% 
-  mutate(stand.spec = word(Output.Taxon, 1,2))
+  dplyr::select(Search, Output.Taxon, family = Family) %>% 
+  mutate(stand.spec = word(Output.Taxon, 1,2),
+         genus = word(Output.Taxon, 1))
 trait5 <- trait4 %>% 
   left_join(lcvp_stand, by = c("AccSpeciesName" = "Search")) 
+
+# Save clean TRY data
+saveRDS(trait5, "RDS_files/01_Clean_TRY_data.rds")
+# trait5 <- readRDS("RDS_files/01_Clean_TRY_data.R")
 
 # check missing species again
 trait_sp <- trait5$stand.spec %>% unique
