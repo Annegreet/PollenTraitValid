@@ -20,17 +20,9 @@
 
 ## Load packages
 if(!require(tidyverse)) install.packages("tidyverse")
-
-## Load packages
-if(!require(tidyverse)) install.packages("tidyverse")
 if(!require(rioja)) install.packages("rioja") # plot pollen diagrams
 if(!require(ggrepel)) install.packages("ggrepel") # repel point labels
 if(!require(readxl)) install.packages("readxl") # repel point labels
-
-# - compare representation of pollen in vegetation
-# - classify by pollination mode
-# - classify by woody/non-woody
-# - compare with and without correction factors
 
 
 ## Prepare data ----
@@ -64,9 +56,9 @@ polmode <- polmode %>%
 ## Plot pollen data ----
 pol <- pollen %>% 
   ungroup %>% 
-  select(-adjustedpercent) %>% 
+  select(sitename, pollentaxon, percent) %>% 
   pivot_wider(names_from = pollentaxon, values_from = percent) %>% 
-  select(-sitename, -Liliaceae, -`Pedicularis palustris`) %>% 
+  mutate(across(where(is.numeric), ~.*100)) %>% 
   select(where(~ any(. > 1))) %>% # filter low values
   as.data.frame()
 sitenames <- pollen %>% pull(sitename)  %>% unique
@@ -98,8 +90,6 @@ pol_plot <-
     y.tks = 1:16,
     y.tks.labels = sitenames
   )
-rm(list=setdiff(ls(), c("pol_plot")))
-
 
 ## Prepare data - Switzerland ----
 pollen <- readRDS("RDS_files/01_Pollen_data_Swiss.rds")
@@ -137,10 +127,10 @@ polmode <- polmode %>%
 ## Plot pollen data ----
 pol <- pollen %>% 
   ungroup %>% 
-  select(-adjustedpercent) %>% 
+  select(sitename, pollentaxon, percent) %>% 
   pivot_wider(names_from = pollentaxon, values_from = percent) %>% 
-  select(-sitename) %>% 
-  select(where(~ any(. > 1))) %>% # filter low values
+  mutate(across(where(is.numeric), ~.*100)) %>% 
+  select(where(~ any(. > 5))) %>% # filter low values
   as.data.frame()
 sitenames <- pollen %>% pull(sitename) %>% unique
 bar_colour <- polmode %>% 
@@ -158,7 +148,7 @@ par(fig=c(0.01, 1, 0.07, 0.8),
 
 pol_plot_swiss <-
   strat.plot(
-    pol,
+    pol[,-1],
     plot.bar = TRUE,
     lwd.bar = 10,
     scale.percent = TRUE,
