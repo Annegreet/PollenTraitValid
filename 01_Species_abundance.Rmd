@@ -12,10 +12,13 @@ editor_options:
 # load libraries
 library(tidyverse)
 library(readxl)
-library(Taxonstand)
+library(LCVP)
+library(lcvplants)
 ```
 
-## To do
+# To do
+
+# Scotland
 
 ## QGIS
 
@@ -218,7 +221,11 @@ veg_cover_bc <-  veg_cover_bc %>%
 ```{r}
 # load data
 spec_a_raw <- read_xlsx("Data/Species_zone_A.xlsx", skip = 1)
+canop_a_raw <- read_xlsx("Data/Canopy_zone_A.xlsx")
 
+canop_a <- canop_a_raw %>% 
+  pivot_longer(-sitename, names_to = "species", values_to = "abun") %>% 
+  mutate(direction = "Canopy", distance = "0-10 meter")
 # Make tidy
 spec_a <- spec_a_raw %>% 
   pivot_longer(3:19, names_to = "plot", values_to = "abun") %>% 
@@ -243,6 +250,7 @@ spec_a <- spec_a_raw %>%
                               plot %in% c("N...12","NE","SE","NW","SW", "E...14", "S...16", "W...18") ~ 
                                 "6-10 meter",
                               plot == "Center" ~ "0 meter")) %>% 
+  bind_rows(canop_a) %>% 
   # create unique id for plot in site
   group_by(sitename, direction, distance) %>% 
   mutate(plot = cur_group_id())  
@@ -264,4 +272,177 @@ veg_cover_bc <- veg_cover_bc %>%
 
 saveRDS(veg_cover_bc, "RDS_files/01_Species_abundance_bc.rds")
 saveRDS(spec_a, "RDS_files/01_Species_abundance_a.rds")
+```
+
+# Switzerland
+
+## QGIS
+
+Land cover data was downloaded from:
+<https://www.bfs.admin.ch/bfs/en/home/services/geostat/swiss-federal-statistics-geodata/land-use-cover-suitability.html>
+
+To decrease file size, I only selected relevant columns: the one
+containing coordinates and land cover data using the following code:
+
+```{r eval = FALSE}
+# ag_b_00_03_37_area_csv <- read_delim(
+#     "C:/Users/lgxgv/OneDrive - The University of Nottingham/Data analysis/PhD/Validation-study/Data/Swiss_LC/ag-b-00.03-37-area-csv.csv",+delim = ";",
+#     escape_double = FALSE,
+#     trim_ws = TRUE
+#   )
+# 
+# LC <- ag_b_00_03_37_area_csv %>%
+#   dplyr::select(RELI, E_COORD = E, N_COORD = N, LC18_6, LC18_27)
+# 
+# write.csv(LC, file = "C:/Users/lgxgv/OneDrive - The University of Nottingham/Data
+#           analysis/PhD/Validation-study/Data/Swiss_LC/Swiss_LC18.csv")
+
+```
+
+In this file I found the CRS:
+<https://www.bfs.admin.ch/bfs/en/home/services/geostat/swiss-federal-statistics-geodata/land-use-cover-suitability/swiss-land-use-statistics.assetdetail.20104775.html>\
+"Les coordonnées « E_COORD » et « N_COORD » des hectares dans le système
+de coordonnées suisse MN95 (7 chiffres). Les coordonnées représentent le
+point d'échantillonnage correspondant (intersections des coordonnées
+hectométriques)."
+
+Import Swiss land cover (100m resolution) Swiss_LC18.csv
+
+-   Set CRS code to EPSG:4150 Rasterize this layer using the GDAL
+    rasterize (vector to raster) tool
+-   Set burnin to LC18_27
+-   Horizontal and vertical resolution to 100 m
+-   export and set resolution to 25 m for merge with forest cover data
+
+Import forest cover data in ArcGIS pro reproject to EPSG:4150 and export
+raster(folder called reproj)/ Import to QGIS set layer crs to EPSG:4150
+
+Import coordinates of pollen plots (Pollen_site_coord.csv).
+
+Create buffer zone of 100 m and 1000 m
+
+Use Zonal histogram to compute pixels in zone attributed to certain land
+cover type Export as Veg_cover_zoneC.csv and Veg_cover_zoneB.csv
+
+Import coordinate of all BDM sites Use Sample raster values to compute
+landcover types for vegetation plots. Export as Veg_type_plots_csv
+
+```{r}
+zone_b_raw <- read.csv("Data/Swiss_LC/FC_LC_cover_zoneB_swiss.csv")
+zone_c_raw <- read.csv("Data/Swiss_LC/FC_LC_cover_zoneC_swiss.csv")
+LC_labels <- read_xlsx("Data/Swiss_LC/be-b-00.03-37-area-var-v01.xlsx",
+                       sheet = "Codes LC_27")
+FC_labels <- read.csv("Data/Swiss_LC/Forest_cover_labels.csv") %>% 
+  rename(CODE = category)
+LC_labels <- LC_labels %>% 
+  dplyr::select(CODE, LABEL_DE) %>% 
+  bind_rows(FC_labels)
+
+zone_b <- zone_b_raw %>% 
+  # make tidy
+  dplyr::rename(sitename = aID_STAO,lon = X, lat = Y) %>% 
+  pivot_longer(cols = contains("HISTO"), names_to = "veg_type") %>% 
+  # rename veg_types
+  mutate(veg_type = str_remove(veg_type, "HISTO_") %>% as.numeric) %>% 
+  filter(!value == 0) %>% 
+  left_join(LC_labels, by = c("veg_type" = "CODE")) %>% 
+  # filter land cover type that are not vegation
+  filter(!LABEL_DE %in% c( "Lockergestein", "Wasser","Gebäude",
+                           "Versteinte Flächen","Befestigte Flächen",
+                           "Gemischte Kleinstrukturen")) %>%
+  # calculate veg_type percentage
+  group_by(sitename) %>% 
+  # calculate percentages
+  mutate(veg_cov = value/sum(value)) %>%
+  group_by(sitename, LABEL_DE) %>%
+  summarise(veg_cov = sum(veg_cov, na.rm = TRUE)) 
+
+zone_c <- zone_c_raw %>% 
+  # make tidy
+  dplyr::rename(sitename = aID_STAO,lon = X, lat = Y) %>% 
+  pivot_longer(cols = contains("HISTO"), names_to = "veg_type") %>% 
+  # rename veg_types
+  mutate(veg_type = str_remove(veg_type, "HISTO_") %>% as.numeric) %>% 
+  filter(!value == 0) %>% 
+  left_join(LC_labels, by = c("veg_type" = "CODE")) %>% 
+  # filter land cover type that are not vegation
+  filter(!LABEL_DE %in% c( "Lockergestein", "Wasser","Gebäude",
+                           "Versteinte Flächen","Befestigte Flächen",
+                           "Gemischte Kleinstrukturen")) %>%
+  # calculate veg_type percentage
+  group_by(sitename) %>% 
+  # calculate percentages
+  mutate(veg_cov = value/sum(value)) %>%
+  group_by(sitename, LABEL_DE) %>%
+  summarise(veg_cov = sum(veg_cov, na.rm = TRUE)) 
+
+# merge zone b and c
+veg_cover <- zone_b %>% 
+  full_join(zone_c, by = c("sitename", "LABEL_DE"), 
+            suffix = c("_b","_c")) %>% 
+  replace_na(list(veg_cov_b = 0))
+```
+
+```{r join veg type data and species data}
+# Veg type of BDM sites
+veg_type <- read.csv("Data/Swiss_LC/FC_LC_type_swiss.csv")
+
+# Join with labels
+veg_type <- veg_type %>% 
+  left_join(LC_labels, by = c("SAMPLE_1" = "CODE")) 
+
+# Load in species data
+bdm_sp <- readRDS("RDS_files/01_Species_abundance_Swiss.rds")
+
+bdm_sp <- bdm_sp %>% 
+  # filter stuff that is not a plant
+  filter(!stand.spec == "No plants") %>% 
+  # filter unindentified
+  filter(!stand.spec == "Unindentified") %>% 
+  # join with vegetation type data
+  left_join(veg_type, by = c("sitename" = "aID_STAO")) 
+# create table with genus and family to join after summarizing
+genus_fam <- bdm_sp %>% 
+  ungroup() %>% 
+  dplyr::select(family, genus, stand.spec) %>% 
+  distinct
+```
+
+```{r}
+spec_cover <- bdm_sp %>% 
+  # calculate average species cover per vegetation type using the plots belonging to that vegetation type
+  group_by(sitename, LABEL_DE, stand.spec) %>% 
+  summarise(abun = mean(abun)) %>% 
+  # join with vegetation cover data
+  right_join(veg_cover, by = c("sitename", "LABEL_DE")) %>% 
+  # weight species abundance by veg cover
+  mutate(spec_abun_b = abun*veg_cov_b, spec_abun_c = abun*veg_cov_c) 
+
+# print table with missing species data for vegetation types
+missing_vegtype <- spec_cover %>% 
+  filter(is.na(stand.spec)) %>% 
+  group_by(sitename, LABEL_DE) %>% 
+  summarise(cov_b = round(sum(veg_cov_b), 2), 
+            cov_c = round(sum(veg_cov_c), 2)) %>%
+  filter(!cov_b == 0|!cov_c == 0) 
+
+# for missing data, use species data from other plots
+missing <- bdm_sp %>% 
+  filter(LABEL_DE %in% missing_vegtype$LABEL_DE) %>% 
+  group_by(LABEL_DE, stand.spec) %>% 
+  summarise(abun = mean(abun))
+spec_cover_na <- spec_cover %>% 
+  filter(is.na(stand.spec)) %>%
+  dplyr::select(sitename, LABEL_DE, veg_cov_b, veg_cov_c) %>% 
+  left_join(missing, by = "LABEL_DE") %>% 
+  mutate(spec_abun_b = abun*veg_cov_b, spec_abun_c = abun*veg_cov_c) 
+spec_cover_bc <-  spec_cover %>% 
+  filter(!is.na(stand.spec)) %>%
+  bind_rows(., spec_cover_na) %>% 
+  arrange(sitename, LABEL_DE, stand.spec) %>% 
+  dplyr::select(sitename, stand.spec, spec_abun_b, spec_abun_c) %>% 
+  ungroup() %>% 
+  left_join(genus_fam, by = "stand.spec") 
+
+saveRDS(spec_cover_bc, "RDS_files/01_Species_abundance_zoneBC_swiss.rds")
 ```
