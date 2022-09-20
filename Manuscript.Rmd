@@ -1,7 +1,7 @@
 ---
 output:
   word_document:
-    reference_docx: Manuscript-Markdown-template.docx
+    reference_docx: "Manuscript-Markdown-template.docx"
     fig_caption: yes
 bibliography: Validation_study_references.bib
 ---
@@ -14,12 +14,14 @@ knitr::opts_chunk$set(echo = FALSE,
                       collapse = TRUE,
                       results = "hide")
 
-source("Write_bib_file.R") # Compile library for reference list
 source("01_Prepare_pollen_data.R")
 
 # Libraries
 library(bibtex)
 library(knitr)
+
+# Datasets
+bdm_meta <- readRDS("RDS_files/01_Meta_data_BDM.rds")
 ```
 
 (working title)
@@ -34,61 +36,63 @@ Functional traits provide a better insight in to the processes that drive biodiv
 
 Although palaeoecological studies that have applied the trait-based approach show promising results, it is a relatively new approach of which the intricacies are underexplored. Little is known about how representative the pollen record is of past plant trait composition. Two main methodological issues arise when attempting to reconstruct functional trait composition from pollen data. First, pollen quantity does not exactly represent past plant abundance. Second, the low taxonomic resolution of the pollen record makes it not straightforward to assign traits to pollen taxa, as trait data is generally collected at the species level.
 
-Taxonomic differences in pollen dispersal and production can cause an over- or underrepresentation of taxa in the pollen record. Wind-pollinated and woody taxa are generally better represented in the pollen record than herbaceous and insect-pollinated taxa as their pollen are produced in larger quantities and dispersed over greater distances. The pollen source area for wind pollinated taxa can therefore be a couple magnitudes greater than that of wind pollinated taxa [\@Meltsov_2011](Bunting 2022?) (extend argument? bunting 2003, bunting 2022). It has therefore been suggested by @Blaus_2020 to treat woody and non-woody taxa separately in the reconstruction of functional composition from pollen data. Another or additional way to correct for taxon specific differences use pollen productivity estimates, these correction factors down-weight the contribution of dominant taxa [@Githumbi_2022].
+Taxonomic differences in pollen dispersal and production can cause an over- or underrepresentation of taxa in the pollen record. Wind-pollinated and woody taxa are generally better represented in the pollen record than herbaceous and insect-pollinated taxa as their pollen are produced in larger quantities and dispersed over greater distances. The pollen source area for wind pollinated taxa can therefore be a couple magnitudes greater than that of wind pollinated taxa [@Meltsov_2011] (extend argument? bunting 2003, bunting 2022). It has therefore been suggested by @Blaus_2020 to treat woody and non-woody taxa separately in the reconstruction of functional composition from pollen data. Another or additional way to correct for taxon specific differences use pollen productivity estimates, these correction factors down-weight the contribution of dominant taxa [@Githumbi_2022].
 
 Perhaps the most challenging in reliably reconstructing past trait is to attribute functional trait data to the taxa found in pollen records. It is rarely possible to resolve the pollen record to the species level [@Birks_2020]. Trait variation within taxa can be substantial depending on the trait and the diversity of the taxon [@Albert_2010; @Prinzing_2008]. It can be expected that this especially problematic in the case of large, abundant plant families that cannot easily be resolved to a lower taxonomic level, such as the Poaceae family. @Blaus_2020 and @Carvalho_2019 proposed that the high species number included in herbaceous pollen taxon could be one of the reasons why herbaceous vegetation was less well represented by pollen based functional diversity reconstructions. In both studies, however, traits values of pollen taxa were calculated by averaging over the available species level trait information. In this study, we use a Bayesian approach for modelling trait composition from pollen data, thereby allowing for the propagation of uncertainty in the taxon level trait reconstruction to the community level.
 
-With this study, we aim to test the validity of using of pollen records for plant trait composition reconstruction. We use surface pollen samples as they approximate vegetation composition in recent years [@Birks_2016]. We examine the effectiveness of pollen production factors to improve the pollen - functional diversity relationship. Furthermore, we test the representation of different plant functional groups by the pollen-based functional trait reconstruction. Laslty, we investigate the effect of taxonomic resolution on the reconstructions.
+With this study, we aim to test the validity of using of pollen records for plant trait composition reconstruction. We examine the effectiveness of pollen production factors to improve the pollen - functional diversity relationship. Furthermore, we test the representation of different plant functional groups by the pollen-based functional trait reconstruction. Laslty, we investigate the effect of taxonomic resolution on the reconstructions.
 
 ## Method
 
-### Study locations
+### Study sites
 
-Here, we use surface samples of 16 Scottish and 26 Swiss sites to test the relationship between reconstructed trait composition from pollen data and vegetation trait composition.
+We collected pollen, trait and species composition data from 16 sites in the Cairngorms National Park, Scotland, United Kingdom. Sites were selected to represent four vegetation types in the area: grassland, heath land, deciduous forest and coniferous forest. Sampling locations were at least 1 km from each other to avoid pollen source areas from overlapping with each other. Pollen, trait and species data was also available from `r length(bdm_meta)` sites across Switzerland were monitored in the context of the Biodiversity Monitoring Switzerland (BDM). This is a systematic sampling grid for the long-term monitoring of plant and animal species in Switzerland [@BDM_2022]. Of these sites `r table(bdm_meta$habitat01)[1]` were forest and `table(bdm_meta$habitat01)[2]` grassland, spanning an elevation between `r min(bdm_meta$elevation)` and `r max(bdm_meta$elevation)`. Trait and species composition data from `r nrow(read.csv("Data/Swiss_LC/all_BDM_plots_coord.csv")) - length(bdm_meta)` were also used in this study.
 
 ### Study design
 
-Pollen data, plant species composition data and trait data were collected in 16 sampling locations in June 2021 in the Cairngorms National Park, Scotland, United Kingdom. Study design mostly followed the protocol of @Bunting_2013 (Appendix). Sampling locations were at least 1 km from each other to avoid pollen source areas from overlapping with each other. Sites were selected to represent four vegetation types in the area: grassland, heath land, deciduous forest and coniferous forest. Every sampling location consisted of three nested concentric rings of 3.4m, 100m and 1000m in radius. The inner two rings were surveyed in the field and for the outer ring vegetation cover was estimated using QGIS and the Scottish Habitat and Land cover map of 2020. To determine the composition of the modern pollen assemblage at every site, surface samples of moss were collected at the centre of each sampling location. Moss was collected from multiple location within a 1m radius from the centre. Only living tissue was sampled.
-
-An additional 26 pollen samples were collected from sites in the Swiss Biodiversity Monitoring network in summer 2020, that were selected based on an elevation gradient (?). Only the inner ring (0-3.4m) was surveyed in these sites. [(Check with Tom the exact method in Switzerland)]{.underline}
+We compare trait composition of vegetation with trait composition reconstructed from surface pollen samples. Surface pollen samples are collected from moss polsters and approximate vegetation composition in recent years [@Birks_2016] [Other ref?]. Study design mostly followed the protocol of @Bunting_2013 (Appendix), which allows for the calculation of vegetation composition in concentric circles around the moss sampling point. We calculated the vegetation composition in three nested concentric rings of 3.4m, 100m and 1000m in radius. The inner ring (3.4m) was surveyed in the field, the middle ring (100m) was surveyed in Scotland, but not in Switzerland. The vegetation cover of the outer ring (1000m) and the middle ring for Switzerland was estimated using QGIS and land cover maps [@SwissFC; @SwissLC;\@scotisch_government;\@QGIS_software].
 
 ### Vegetation data
 
-In the Scottish sites, the inner ring (0-3.4m) 17 plots of 0.5 m were surveyed: one in the center, 3 in every wind direction between 3, 6 and 10 meters, and one in the NE, NW, SE and SW direction (See design in Appendix). In the middle ring (10-100m) between 4 and 6 plots of 10 by 10 meter were selected on a stratified random design based on vegetation types that were identified in the fields. Vegetation abundance was estimated using percentage cover. All species names were standardized according to the Leipzig Plant Catalogue using the *lcvplants* and *lcvp* R packages [@freiberg2020lcvp]. (Check with Tom the exact method in Switzerland)
+In the inner ring (3.4m) 4 plots of 0.25 m^2^ (0.16m^2^ in Switzerland) were surveyed, one in every wind direction. At the Scottisch sites the middle ring was surveyed as well, between 4 and 6 plots of 10 by 10 meter were selected on a stratified random design based on vegetation types that were identified in the fields. Species abundance was estimated using percentage cover in Scotland. In Switzerland, each subplot was a quadrat with nine points (a 3 x 3 grid), and percentage coverage of the species present at the nine points was estimated. All species names were standardized according to the Leipzig Plant Catalogue using the *lcvplants* and *lcvp* R packages [@freiberg2020lcvp].
 
 ### Trait data
 
-Trait data was collected in the middle ring. For determining plant height 10 flowering of individuals were selected at every site if present, non-flowering individuals were selected if flowering individuals were not available. Five leaf samples per species for specific leaf area (SLA), leaf area (LA), leaf dry matter content (LDMC), leaf carbon and leaf nitrogen were collected in sealable plastic bags. Fresh weight and surface area were measured within 72 hours of collection using a carat scale and flatbed scanner. Samples were dried at 70 C for 72 hours before measuring dry weight. For measuring leaf carbon and nitrogen samples using ICP-MS were crushed and X.
+Three traits were selected for the analysis, specific leaf area, leaf area and and plant height. These traits reflect different components in the spectrum of plant strategies. XXX. In Scotland, trait data was collected in the middle ring (100m). For determining plant height 10 flowering of individuals were selected at every site if present, non-flowering individuals were selected if flowering individuals were not available. Five leaf samples per species for specific leaf area (SLA), leaf area (LA), leaf dry matter content (LDMC), leaf carbon and leaf nitrogen were collected in seal-able plastic bags. Fresh weight and surface area were measured within 72 hours of collection using a carat scale and flatbed scanner. Samples were dried at 70 C for 72 hours to constant dry weight before measuring dry weight. In Switzerland, the trait data was collected for species present at the nine points in the 3 by 3 grid.
 
-For reconstructing trait composition from pollen data, previously gapfilled data from the TRY database *(will replace this by the raw TRY data as discussed)* was used [@kattge2020try].
-
-(Check with Tom the exact method in Switzerland)
+For reconstructing trait composition from pollen data and for classifying vegetation data in to plant growth forms and pollination mode, trait data from the TRY database was used [@kattge2020try] (Appendix).
 
 ### Pollen data
 
--   Pollen were extracted from the moss using standardized pollen preparation protocol (REF)
+Moss was collected from multiple location within a 1m radius in the centre of the inner ring. Only living tissue was sampled. Pollen were extracted from the moss using standardized pollen preparation protocol (REF). Pollen were identified using light microscope and the key of (REF). To test the ability of pollen correction factors to improve pollen - vegetation relationships, pollen productivity estimates from @Githumbi_2022 were used. Pollen productivity estimates were not available for all taxa, taxa without pollen productivity factors were excluded. On average, this led to the exclusion of `r round(mean(missing_ppe_scot$percent_missing),2)*100`% of the Scottish pollen data (max `r round(max(missing_ppe_scot$percent_missing),2)*100`%) and `round(mean(missing_ppe_swiss$percent_missing),2)*100`% of the Swiss pollen data (max `r round(max(missing_ppe_swiss$percent_missing),2)*100`%). Pollen were divided in to two plant functional groups according to @Reitalu_2019 consisting of woody (trees and shrubs) ornon-woody species (grasses, herbs and dwarf shrubs of the Ericaceae family). @Reitalu_2019 was also used to classify pollen in to pollination mode, either insect-pollinated or not insect-pollinated.
 
--   Pollen were identified using light microscope and the key of (REF)
-
-    -   pollen correction factors- new data of Githumbi 2022 [@Githumbi_2022],
-
-    let to, on average, exclusion of `r round(mean(missing_ppe_scot$percent_missing),2)*100`% of the Scottish pollen data (max `r round(max(missing_ppe_scot$percent_missing),2)*100`%) and `round(mean(missing_ppe_swiss$percent_missing),2)*100`% of the Swiss pollen data (max `r round(max(missing_ppe_swiss$percent_missing),2)*100`%).
-
--   Pollen were divided in to plant functional groups according to [@Reitalu_2019] trees shrubs (including Ericaceae family??), and herb (including grasses)
-
-### Assigning species to pollen taxa
-
-For reconstructing plant trait composition from pollen data, assumptions need to be made about the species belonging to the pollen taxa in the data set. We used the *rgbif* package to download the current distribution of species belonging to each pollen taxon in Scotland and Switzerland from the Global Biodiversity Information Facility database (REF). Species distribution data was queried using the pollen taxonomic name
+For reconstructing plant trait composition from pollen data, assumptions need to be made about the species belonging to the pollen taxa in the data set. We used the *rgbif* package to download the current distribution of species belonging to each pollen taxon in Scotland and Switzerland from the Global Biodiversity Information Facility database (REF). Species distribution data was queried using the pollen taxonomic name, i.e. the lowest taxonomic name the pollen could be identified to .
 
 ### Calculation of community weighted mean
 
-To test the representativeness of pollen for plant trait composition reconstructions, the community weighted mean trait values was calculated for the pollen data and for the vegetation data in the three nested circles: zone A (0-3.4m) zone B (10-100 m) and zone C (100 - 100 m). The trait distribution on the species or the pollen taxonomic level was estimated assuming that the trait data follows a lognormal distribution for the likelihood, so that$$trait_{i}^{observed} \sim { lognormal(\mu_{j},\sigma_j)}$$Where *i* represents each trait observation of a taxon (*j*) from the trait data. $\mu_{j}$ and $\sigma_{j}$ are the mean trait value and the standard deviation per taxon, respectively. Vague priors were used for the taxon mean and standard deviation estimation. We modeled the community weighted mean (CWM) as a mixture of normal distributions that were weighted by corrected pollen percentages, so that
+We use the community weighted mean (CWM) to characterize functional composition, which here is specified as the trait distribution of a taxon, i.e. the species in the vegetation data and the pollen taxon in the pollen data, weighted by its abundance. First, the trait distribution on the species or the pollen taxonomic level was estimated. We assume that the trait data follows a lognormal distribution for the likelihood, so that$$trait_{i}^{observed} \sim { lognormal(\mu_{j},\sigma_j)}$$Where *i* represents each trait observation of a taxon (*j*) from the trait data. $\mu_{j}$ and $\sigma_{j}$ are the mean trait value and the standard deviation per taxon, respectively. Vague priors were used for the taxon mean and standard deviation estimation. We then modeled the community weighted mean (CWM) as a mixture of normal distributions that were weighted by the species abundance or pollen percentage, so that
 
 $$
 CWM_{s} \sim \sum^{n}\pi_{j}Normal(\mu_{j},\sigma_{j})
 $$
 
-Where *n* is the total number of taxa, and $\pi_{j}$ the abundance of each pollen taxon/species at a given site. The *CWM~­~^mean^* and *CWM^sd^* were subsequently used in the estimation of the correlation between the trait composition of the vegetation and the pollen data. We used a multivariate normal distribution to estimate correlation coefficient *ρ* so that, $$[CWM_{s}^{veg},CWM_{s}^{veg}] \sim MultivariateNormal([\mu_{veg},\mu_{veg}],\sum) $$
+Where *n* is the total number of taxa, and $\pi_{j}$ the abundance of each pollen taxon or species at a given site *s*. The mean *CWM~­~^mean^* and the standard deviation *CWM^sd^* of this modeled distribution was subsequently used in the estimation of the correlation between the trait composition of the vegetation and the pollen data.
+
+### Comparison between pollen and vegetation community weighted mean
+
+To test the correlation between the pollen based reconstruction of CWM and the vegetation CWM, we estimated the correlation coefficient *ρ* we assumed the data follows a multivariate t likelihood distribution so that, $$[CWM_{s}^{pol},CWM_{s}^{veg}] \sim t_{df}([\mu_{pol},\mu_{veg}],\sum) $$
+
+Where we estimated the degrees of freedom ($df$) of the multivariate t-distribution with and exponential prior with a mean of 30 as the t-distribution becomes almost normal at values of 30 and above (Kruscke, dbda),
+
+$$
+df \sim Exp(\lambda)
+$$
+
+$$
+\lambda = 1/30
+$$
+
+We used an uninformative, flat prior for $\rho$ so that,
 
 $$
 \sum \sim \begin{pmatrix} \sigma_{veg}^{2} & \rho\sigma_{veg}\sigma_{pol} \\ \rho\sigma_{veg}\sigma_{pol} & \sigma_{pol}^{2} \end{pmatrix}
@@ -98,33 +102,17 @@ $$
 \rho \sim Uniform(-1,1)
 $$
 
-Correlations were calculated for all zones and three traits (currently): SLA, LA and plant height. Furthermore, four different "treatments" were assigned to test what factors could influence representation of trait composition by pollen data: the use of correction factors, the separation of vegetation and pollen data in to plant functional type and pollination mode. Lastly, the vegetation was aggregated to genus level and family level to test the effect of taxonomic resolution on the reconstructions.
+Correlations were calculated for all zones and three traits: SLA, LA and plant height. Furthermore, four different treatments were assigned to test what factors could influence representation of trait composition by pollen data: the use of correction factors, the separation of vegetation and pollen data in to plant functional type and pollination mode. Lastly, the vegetation was aggregated to genus level and family level to test the effect of taxonomic resolution on the reconstructions.
 
 ## Results
 
 ### Effect of correction factors
 
-![Estimated correlation between the pollen data and vegetation data. Whisker plots show the median estimated correlation coefficient and the 95% credibility interval.](Figures/Pollen_uncorrected.png)
-
-![Estimated correlation between the pollen data and vegetation data. Whisker plots show the median estimated correlation coefficient and the 95% credibility interval.](Figures/Pollen_corrected.png)
-
 ### Pollination mode
-
-![Estimated correlation between the pollen data and vegetation data. Whisker plots show the median estimated correlation coefficient and the 95% credibility interval.](Figures/Wind_pollinated.png)
-
-![Estimated correlation between the pollen data and vegetation data. Whisker plots show the median estimated correlation coefficient and the 95% credibility interval.](Figures/NotWind_pollinated.png)
 
 ### Plant functional group
 
-![Estimated correlation between the pollen data and vegetation data. Whisker plots show the median estimated correlation coefficient and the 95% credibility interval.](Figures/TRSH.png)
-
-![Estimated correlation between the pollen data and vegetation data. Whisker plots show the median estimated correlation coefficient and the 95% credibility interval.](Figures/HERB.png)
-
 ### Effect of taxonomic resolution
-
-![](Figures/veg_genus.png)
-
-## ![](Figures/veg-Family.png)
 
 ## Discussion
 
@@ -135,37 +123,44 @@ Correlations were calculated for all zones and three traits (currently): SLA, LA
 
 -   Comparison between Switzerland and Scotland methods of sampling
 
--   Some pollen types consider many more species than others for example in this study XX . This is also indentified as a problem in plant richness studies (Reitalu 2019) and trait rep (Carvalho, Blaus). although bayesian xxx
+    -   vegetation surveys - all species versus max nine
+
+    -   estimation of the zones
+
+-   Some pollen types consider many more species than others for example in this study XX . This is also identified as a problem in plant richness studies (Reitalu 2019) and trait rep (Carvalho, Blaus). although bayesian xxx
 
 -   size of the relevant source area (Bunting 2003)
+
+    -   The spatial resolution of a pollen assemblage is difficult to assess and is dependent on several factors, such as differences in taxon-specific differences in pollen productivity and dispersal and landscape structure
+
+    -   here we surveyed sites with different openness.
+
+-   pollen based trait reconstructions have been shown to correctly reflect environmental gradients as elevation (Sande) and and climatic variations (Barboni)
+
+## References
+
+    <div id="refs"></div>
 
 ## Appendix
 
 ### Pollen representation
 
-```{r fig.height=6, fig.width=10, fig.cap="Scatter plot of vegetation basal area % against pollen abundance %"}
+```{r echo=FALSE, fig.height=6, fig.width=10}
 source("03_Vegetation_pollen_comparison.R") # pollen plot
 pol_veg_plot
 ```
 
-```{r fig.height=6, fig.width=10, fig.cap="Scatter plot of vegetation basal area % against adjusted pollen abundance %"}
-
+```{r echo=FALSE, fig.height=6, fig.width=10}
 source("03_Vegetation_pollen_comparison.R") # pollen plot
 pol_veg_plot_adj
-
 ```
 
 ### Site characteristics
 
 insert pollen plot
 
-```{r}
+```{r echo=FALSE}
 # source("03_pollen_diagrams.R")
-```
-
-```{r}
-source("01_PFT_table_vegetation.R")
-sum
 ```
 
 ### Study design
@@ -176,16 +171,14 @@ sum
 
 ### Trait values
 
-```{r}
-source("02_Prepare_trait_data_gapfilled.R")
+```{r echo=FALSE}
+sum_trait <- readRDS("RDS_files/01_summary_table_TRY_data.rds")
 kable(sum_trait)
 ```
 
-```{r}
-source("01_Prepare_trait_data.R", encoding = 'UTF-8', echo=TRUE)
+```{r echo=FALSE}
+source("01_Prepare_trait_data_vegetation.R",encoding ="UTF-8")
 kable(sum_ph)
 kable(sum_la)
 kable(sum_sla)
 ```
-
-## References
