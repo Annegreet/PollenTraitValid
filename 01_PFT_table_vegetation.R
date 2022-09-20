@@ -158,7 +158,11 @@ pft <- traits %>%
   # Ericaceae specified as herb in pollen data
   mutate(growthform = case_when(AccSpeciesName %in% c("Calluna vulgaris", 
                                                       "Erica cinerea",
-                                                      "Erica tetralix") ~ "herb",
+                                                      "Erica tetralix",
+                                                      "Vaccinium myrtillus",
+                                                      "Empetrum nigrum",
+                                                      "Vaccinium vitis-idaea",
+                                                      "Vaccinium nitens") ~ "herb",
                                 TRUE ~ growthform))
 
 
