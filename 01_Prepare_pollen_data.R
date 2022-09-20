@@ -46,15 +46,20 @@ dfPOL <- pollen_raw %>%
   mutate(sitename = recode(sitename, C014.1 = "C014"),
          # convert count to numeric       
          count = as.numeric(count)) %>% 
+  # remove zeros
+  filter(!count == 0) %>% 
+  mutate(pollentaxon = recode(pollentaxon, Tsuga = "unindentified", 
+                              Liliaceae = "unindentified", Drosera = "unindentified")) %>%  # probably misidentified
   #correct pollen taxon names
   mutate(pollentaxon = 
            # remove "-type" to facilitate GBIF search
            str_remove(pollentaxon, "-type") %>% 
            # Typos
            recode(Caryophyllaccea = "Caryophyllaceae",
-                  Lilaceae = "Liliaceae",
                   "Juniperus communis" = "Juniperus")
          ) %>% 
+  # filter out unidentified
+  filter(!pollentaxon %in% c("unindentified")) %>% 
   filter(!is.na(count))
 
 # percentage data with missing ppe's 
@@ -77,7 +82,7 @@ dfPOL_nc <- dfPOL %>%
 # make function to continue draw from rnorm till RPP is positive (otherwise negative percentages)
 norm_positive <- function(RPP, RPP_sd){
   success <- FALSE
-  while(!success){
+  while (!success) {
     x <- rnorm(1, RPP, RPP_sd)
     success <- x > 0
     }
@@ -107,7 +112,7 @@ dfPOL <- dfPOL_nc %>%
   left_join(dfPOL_cor, by = c("sitename", "pollentaxon")) %>% 
   # add PFT and pollination mode
   left_join(polmode, by = "pollentaxon") %>% 
-  ungroup()
+  ungroup() 
 
 saveRDS(dfPOL, "RDS_files/01_Pollen_data_Scot.rds")
 
@@ -121,14 +126,18 @@ dfPOL <- read.csv("Data/Pollen_count_Switserland-checked.csv", skip = 1, sep = "
                values_to = "count") %>%
   mutate(count = as.numeric(count)) %>% # change variable types
   dplyr::select(sitename, pollentaxon = Sample.name, count) %>%  # select relevant rows
-  filter(!pollentaxon == "Tsuga") %>%  # probably misidentified
+  mutate(pollentaxon = recode(pollentaxon, Tsuga = "unindentified", 
+         Liliaceae = "unindentified", Drosera = "unindentified")) %>%  # probably misidentified
+  # remove zeros
+  filter(!count == 0) %>% 
+  # filter out unidentified
+  filter(!pollentaxon %in% c("unindentified")) %>% 
   #correct pollentaxon names
   mutate(pollentaxon = 
            # remove "-type" to facilitate GBIF search
            str_remove(pollentaxon, "-type") %>% 
            # Typos
-           recode(Caryophyllaccea = "Caryophyllaceae",
-                  Lilaceae = "Liliaceae")
+           recode(Caryophyllaccea = "Caryophyllaceae")
   )
 
 # percentage data with missing ppe's 
