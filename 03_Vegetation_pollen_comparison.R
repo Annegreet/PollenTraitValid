@@ -107,30 +107,8 @@ zoneC_swiss <- bdm_abun_bc %>%
 veg <- bind_rows(zoneA, zoneA_swiss, zoneB, zoneB_swiss, zoneC, zoneC_swiss) %>% 
   left_join(dfPOL, by = c("country","sitename","pollentaxon")) 
 
-# Add pollination mode and plant functional type
-polmode <- polmode %>% 
-  mutate(pollentaxon = dplyr::recode(pollentaxon,  
-                              "Apiaceae undiff." = "Apiaceae",
-                              "Caryophyllaceae undiff." = "Caryophyllaceae",
-                              "Cyperaceae undiff." = "Cyperaceae",
-                              "Ericacea-type" = "Ericales (tetrad)",
-                              "Fraxinus excelsior" = "Fraxinus",
-                              "Geranium" = "Geraniaceae",
-                              "Juniperus" = "Juniperus communis",
-                              "Pedicularis" = "Pedicularis palustris",
-                              "Ranunculuceae undiff." = "Ranunculaceae",
-                              "Rosaceae undiff." = "Rosaceae",
-                              "Viola palustris-type" = "Viola")) %>% 
-  add_row(pollentaxon = "Asteraceae", fam = "Asteraceae", growthform = "herb", pollination = "not wind") %>% 
-  add_row(pollentaxon = "Lamiaceae", fam = "Lamiaceae", growthform = "herb", pollination = "not wind") %>% 
-  add_row(pollentaxon = "Malvaceae", fam = "Malvaceae", growthform = "tree", pollination = "not wind") %>% 
-  add_row(pollentaxon = "Plantago", fam = "Plantaginaceae", growthform = "herb", pollination = "wind") %>% 
-  add_row(pollentaxon = "Liliaceae")  %>% 
-  add_row(pollentaxon = "Pteridophyte") %>% 
-  add_row(pollentaxon = "Tsuga ")
 
-
-## Calculate pollen representation value (Julier 2018, https://doi.org/10.1080/01916122.2017.1356392)
+## Calculate pollen representation pot (Julier 2018, https://doi.org/10.1080/01916122.2017.1356392)
 ## Plot pollen representation per zone ----
 zone_lab <- c("Inner ring (3.4 m)", "Middle ring (100 m)", "Outer ring (1km)")
 names(zone_lab) <- c("zoneA", "zoneB", "zoneC")
@@ -163,7 +141,7 @@ p <- ggplot(pol_veg, aes(x = veg, y = pol, shape = country)) +
   scale_y_continuous("Pollen abundance (%)", limits = c(0,100)) + 
   scale_color_manual(name = "Pollination mode", 
                      values = c("darkorchid", "darkorange"),
-                     labels = c("Not wind pollinated", "Wind pollinated")) +
+                     labels = c(`not wind` = "Not wind pollinated", wind = "Wind pollinated")) +
   # Faceting
   facet_wrap(~zone, labeller = labeller(zone = zone_lab)) +
   # Theme
@@ -191,7 +169,7 @@ p2 <- ggplot(pol_veg_adj, aes(x = veg, y = pol, shape = country)) +
   scale_y_continuous("Pollen abundance (%)", limits = c(0,100)) + 
   scale_color_manual(name = "Pollination mode", 
                      values = c("darkorchid", "darkorange"),
-                     labels = c("Not wind pollinated", "Wind pollinated")) +
+                     labels = c(`not wind` = "Not wind pollinated", wind = "Wind pollinated")) +
   # Faceting
   facet_wrap(~zone, labeller = labeller(zone = zone_lab)) +
   # Theme
