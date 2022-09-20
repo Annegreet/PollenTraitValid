@@ -59,7 +59,7 @@ trait <- trait_raw %>%
           ErrorRisk
           ) %>%
   mutate(ErrorRisk2 = ifelse(is.na(ErrorRisk), 0, ErrorRisk)) %>%
-  filter(ErrorRisk2 < 8) 
+  filter(ErrorRisk2 < 4) # error risks based on Z-scores, see TRY 2019 paper
 
 # Get meta data
 meta <- trait %>% 
@@ -79,7 +79,6 @@ units <- trait %>%
 # Subsetting out traits and naming them
 # if origlname or unit is blank but there are no duplicates we are keeping it. 
 trait2 <- trait %>%
-  # remove problem data where there are replicates for ObservationID
   mutate(remove = case_when(TraitID == 14 & OriglName == "N amount%" ~ 1, 
                             TraitID == 14 & OriglName == "N_senesced_leaf" ~ 1,
                             TraitID == 15 & OriglName == "P_senesced_leaf" ~ 1, 
@@ -221,8 +220,10 @@ trait4 <- trait3 %>%
               names_from = CleanTraitName, values_from = StdValue) %>% 
   # remove duplicated values
   filter(!(duplicated(.[4:10]) & !is.na(OrigObsDataID))) %>% 
-  # conver plantheight from m to cm
-  mutate(PlantHeight = PlantHeight * 100)
+  # convert plantheight from m to cm
+  mutate(PlantHeight = PlantHeight * 100) %>% 
+  # remove zeros from the measurements
+  mutate(across(LeafN:LA, ~na_if(.,0)))
 
 # add pollen to species translation table ----
 spec <- readRDS("RDS_files/02_PollenType_species.rds") %>% 
@@ -231,13 +232,13 @@ spec <- readRDS("RDS_files/02_PollenType_species.rds") %>%
 # check for missing species in the trait data
 trait_sp <- trait4$AccSpeciesName %>% unique
 pol_sp <- spec$stand.spec %>% unique()
-
 misspec <-
   pol_sp[!pol_sp %in% trait_sp] %>%
   sort %>% unique
 
 # improve matching by standardizing species names
-# lcvp <- lcvp_search(str_subset(trait_sp, pattern = " ")) 
+# lcvp <- lcvp_search(str_subset(trait_sp, pattern = " "),
+#                     progress_bar = TRUE) 
 # saveRDS(lcvp, "RDS_files/01_TRY_species_standardization.rds")
 lcvp <- readRDS("RDS_files/01_TRY_species_standardization.rds")
 lcvp_stand <- lcvp %>% 
@@ -270,11 +271,14 @@ sum_trait <- trait6  %>%
   group_by(pollentaxon) %>% 
   summarise(nspec = length(unique(stand.spec)),
     nobs = across(c(LeafN,LeafP,LDMC,SLA,LA,PlantHeight),~sum(!is.na(.))))
-          
+
+saveRDS(sum_trait,"RDS_files/01_summary_table_TRY_data.rds")          
+
 trait_val <- trait6  %>% 
   filter(!is.na(pollentaxon)) %>% 
   group_by(pollentaxon) %>% 
   summarise(across(c(LeafN,LeafP,LDMC,SLA,LA,PlantHeight), 
                    ~paste(round(mean(., na.rm = TRUE), 1), "+-", round(sd(., na.rm = TRUE), 2))))
+saveRDS(trait_val,"RDS_files/01_TRY_data_values.rds")          
 
         
