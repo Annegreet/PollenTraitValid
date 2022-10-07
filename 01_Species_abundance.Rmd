@@ -44,9 +44,72 @@ Use Zone histogram to compute pixels in zone attributed to certain land
 cover type Export as Veg_cover_zoneC.csv and Veg_cover_zoneB.csv
 
 Use Sample raster values to compute landcover types for vegetation
-plots. Export as Veg_type_zoneB_sites.csv and Veg_type_zoneA_sites.csv
+plots. Export as Veg_type_zoneB_sites.csv and Veg_type_zoneA_sites.csv,
 
-## Prepare data
+Canopy data for zoneB was extracted for the zone B sites from the
+Scottish Native Woodland survey:
+<https://forestry.gov.scot/forests-environment/biodiversity/native-woodlands/native-woodland-survey-of-scotland-nwss>
+
+Patterson, G., Nelson, D., Robertson, P. and Tullis, J., 2014.
+*Scotland's Native Woodlands: Results from the Native Woodland Survey of
+Scotland*. [online] Edinburgh: Forestry Commission Scotland. Available
+at:
+<https://forestry.gov.scot/publications/74-scotland-s-native-woodlands-results-from-the-native-woodland-survey-of-scotland>
+[Accessed 3 October 2022].
+
+-   Join NWSS woodland cover shape file with Species Structures table -
+    by SCPTDATA_I
+
+-   Union zone buffer (B or C separately) and NWSS woodland vector layer
+
+-   remove all that don't overlap with the zone buffer
+
+-   calculate area of each polygon with field calculator \$area
+
+-   export to csv
+
+## Zone A
+
+```{r}
+# load data
+spec_a_raw <- read_xlsx("Data/Species_zone_A.xlsx", skip = 1)
+canop_a_raw <- read_xlsx("Data/Canopy_zone_A.xlsx")
+
+canop_a <- canop_a_raw %>% 
+  pivot_longer(-sitename, names_to = "species", values_to = "abun") %>% 
+  mutate(direction = "Canopy", distance = "0-10 meter")
+# Make tidy
+spec_a <- spec_a_raw %>% 
+  pivot_longer(3:19, names_to = "plot", values_to = "abun") %>% 
+  rename(sitename = Site, species = Species) %>% 
+  # remove moss
+  filter(!species %in% c("Moss", "Sphagnum", "Polytrichum commune",
+                         "Sphagnum squarrosum")) %>% 
+  # create direction and distance column
+  mutate(direction = case_when(str_detect(plot, "N") ~ "North",
+                               str_detect(plot, "S") ~ "South",
+                               str_detect(plot, "E") ~ "East",
+                               str_detect(plot, "W") ~ "West",
+                               str_detect(plot, "NE") ~ "Northeast",
+                               str_detect(plot, "NW") ~ "Northwest",
+                               str_detect(plot, "SW") ~ "Southwest",
+                               str_detect(plot, "SE") ~ "Southeast",
+                               plot == "Center" ~ "Center"),
+         distance = case_when(plot %in% c("N...4", "E...5", "S...6","W...7") ~ 
+                                "1.5-3 meter",
+                              plot %in% c("N...8", "E...9", "S...10", "W...11")  ~ 
+                                "3-6 meter",
+                              plot %in% c("N...12","NE","SE","NW","SW", "E...14", "S...16", "W...18") ~ 
+                                "6-10 meter",
+                              plot == "Center" ~ "0 meter")) %>% 
+  bind_rows(canop_a) %>% 
+  # create unique id for plot in site
+  group_by(sitename, direction, distance) %>% 
+  mutate(plot = cur_group_id())  
+  
+```
+
+## Zone B & C
 
 Vegetation cover data.
 
@@ -120,11 +183,12 @@ zone_c <- zone_c %>%
 veg_type <- left_join(zone_b, zone_c, by = c("sitename", "veg_type")) 
 ```
 
-```{r load and prepare vegetation data}
+```{r load and prepare species data}
 # Load in vegetation type data for the plots
 zone_b_site <- read.csv("Data/20220106-Veg_type_zoneB_sites.csv")
+spec_b_raw <- read_xlsx("Data/species_zone_B.xlsx") # load in species data
 
-# Make tidy
+# Make vegetation type tidy
 zone_b_site <- zone_b_site %>% 
   # create seperate site and plot column
   separate(name, c("sitename", "plot")) %>% 
@@ -141,11 +205,11 @@ zone_b_site <- zone_b_site %>%
                            "7" = "E3: Seasonally wet and wet grasslands",
                            "8" = "E4: Alpine and subalpine grasslands",
                            "9" = "E5: Woodland fringes and clearings and tall forb stands",
-                           "10"= "F2: Arctic, alpine and subalpine scrub",
-                           "11" = "F3: Temperate and mediterranean-montane scrub",
-                           "12"= "F4: Temperate shrub heathland",
+                           "10" = "F2: Arctic, alpine and subalpine scrub",
+                           "11"  = "F3: Temperate and mediterranean-montane scrub",
+                           "12" = "F4: Temperate shrub heathland",
                            "13" = "F9: Riverine and fen scrubs",
-                           "14"= "G1: Broadleaved deciduous woodland",
+                           "14" = "G1: Broadleaved deciduous woodland",
                            "15" = "G3: Coniferous woodland",
                            "16" = "G4: Mixed deciduous and coniferous woodland",
                            "17" = "G5: Line of trees, amall anthropogenic woodlands, recently felled woodland, early-stage woodland and coppice",
@@ -155,43 +219,279 @@ zone_b_site <- zone_b_site %>%
                            "21" = "J: Builtup (and Bare before post)",
                            "23" = "O: Bare (after post)"))
 
-# load in vegetation data
-spec_b_raw <- read_xlsx("Data/species_zone_B.xlsx")
-
-# make tidy
+# Tidy and join 
 spec_b <- spec_b_raw %>% 
   pivot_longer(contains("plot"), names_to = "plot", values_to = "abun",
                values_drop_na = TRUE) %>% 
   mutate(plot = str_remove(plot, "plot_ ")) %>% 
   dplyr::select(sitename = Site, plot, species = Species, abun) %>% 
   # join with vegetation type data
-  left_join(zone_b_site, by = c("sitename", "plot"))
+  left_join(zone_b_site, by = c("sitename", "plot")) %>% 
+  # filter trees from species survey (will be covered by NWSS)
+  filter(!species %in% c("Betula pendula", "Pinus sylvestris", 
+                        "Juniperus communis", "Salix sp.",
+                        "Larix decidua", "Salix repens"))
 ```
 
-## Zone B & C
+tree abundance
+
+```{r}
+canop_b_raw <- 
+  read.csv("Data/NWSS_zoneB_ID_forest_cover.csv") %>% 
+  # clean column names
+  rename_with(~str_remove(., "NWSS_Species_Structures_5718542285393555851.â...NWSS_Species_Structures_"),
+              matches("NWSS_Species_Structures_5718542285393555851.â...NWSS_Species_Structures_"))
+canop_c_raw <- 
+  read.csv("Data/NWSS_zoneC_ID_forest_cover.csv") %>% 
+  # clean column names
+  rename_with(~str_remove(., "NWSS_Species_Structures_5718542285393555851.â...NWSS_Species_Structures_"),
+              matches("NWSS_Species_Structures_5718542285393555851.â...NWSS_Species_Structures_"))
+NWSS_sp <- 
+  read.csv("Data/NWSS_Species_Structures.csv") 
+NWSS <- 
+  read.csv("Data/NWSS_basis.csv") %>%  # inventory of NWSS 
+  # clean column names
+  rename_with(~str_remove(., "NWSS_Species_Structures_"),
+              matches("NWSS_Species_Structures_"))
+
+# calculate average species abundance of species per habitat type
+# species percentage of NWSS (not available for all polygon)
+habitats <- canop_c_raw$DOM_HABITA %>% unique
+sp_habitat <- NWSS %>% 
+  filter(DOM_HABITA %in% habitats) %>% 
+  group_by(DOM_HABITA, SPECIES) %>% 
+  summarise(mean_pct = mean(SP_STR_PCT)) 
+
+# - calculate woodland cover for every site
+# - weight woodland cover by mean abundance of species per type
+canop_b <- canop_b_raw %>% 
+  # select relevant columns
+  dplyr::select(sitename = name, SCPTDATA_I, TYPE, DOM_HABITA, woodland_area = Woodland_area) %>% 
+  # fill in area without woodland
+  mutate(TYPE = if_else(TYPE == "", "Open land habitat", TYPE),
+         # rename site names
+         sitename = str_remove(sitename, "-A")) %>% 
+  # calculate woodland type percentage
+  group_by(sitename) %>% 
+  # calculate percentages
+  mutate(total_area = sum(woodland_area)) %>% 
+  mutate(woodland_percentage = woodland_area/total_area) %>% 
+  # join with species abundance
+  left_join(sp_habitat, by = "DOM_HABITA") %>% 
+  # create column with scientific species name
+  mutate(species = recode(SPECIES, "Common alder*" = "Alnus glutinosa",
+                          "Rowan *" = "Sorbus aucuparia",
+                          "Sitka spruce" = "Picea sitchensis",
+                          "European larch" = "Larix decidua",
+                          "Lodgepole pine" = "Pinus contorta",
+                          "Downy birch *" = "Betula pubescens",
+                          "Scots pine *" = "Pinus sylvestris",
+                          "Hazel *" = "Corylus avellana",
+                          "Eared willow *+" = "Salix aurita", 
+                          "Grey willow *" = "Salix cinerea", 
+                          "Hybrid larch" = "Larix decidua", 
+                          "Shrubs - preferentially browsed +" = "Unidentified",
+                          "Dwarf juniper *+" = "Juniperus communis", 
+                          "Silver birch *" = "Betula pendula", 
+                          "Beech" = "Fagus sylvatica", 
+                          "Lawsons cypress" = "Chamaecyparis lawsoniana", 
+                          "Common alder*" = "Alnus glutinosa", 
+                          "Douglas fir" = "Pseudotsuga menziesii", 
+                          "Yew *" = "Taxus baccata", 
+                          "Upright juniper * +" = "Juniperus communis", 
+                          "Norway spruce" = "Picea abies", 
+                          "Bird cherry *" = "Prunus padus", 
+                          "Intermediate oak *" = "Quercus sp.", 
+                          "Sessile oak *" = "Quercus petraea", 
+                          "Ash *" = "Fraxinus excelsior", 
+                          "Holly *" = "Ilex aquifolium", 
+                          "Aspen *" = "Populus tremula", 
+                          "Goat willow*" = "Salix caprea", 
+                          "Elder *" = "Sambucus nigra", 
+                          "Broom *+" = "Cytisus scoparius", 
+                          "Other non-native trees/shrubs" = "Unidentified", 
+                          "Sycamore" = "Acer pseudoplatanus", 
+                          "Grand fir" = "Abies grandis", 
+                          "Gorse *+" = "Ulex europaeus", 
+                          "Gean wild cherry *" = "Prunus avium",
+                          "Austrian pine" = "Pinus nigra",
+                          "Blackthorn *+" = "Prunus spinosa",
+                          "Birch *" = "Betula sp.",
+                          "Coast redwood" = "Sequoia sempervirens",
+                          "Bramble *+" = "Rubus fruticosus",
+                          "Crab apple" = "Malus sylvestris",
+                          "Dog rose *+" = "Rosa canina",
+                          "Geulder rose *+" = "Viburnum opulus",
+                          "Grey alder" = "Alnus incana",
+                          "Hawthorn *" = "Crataegus monogyna",
+                          "Field maple" = "Acer campestris",
+                          "Hornbeam" = "Carpinus betulus",               
+                          "Horse chestnut" = "Aesculus hippocastanum",
+                          "Japanese knotweed +" = "Reynoutria japonica",
+                          "Japanese larch" = "Larix kaempferi",
+                          "Leyland cypress" = "Cupressus sp.",        
+                          "Lime all" = "Tilia sp.",
+                          "Noble fir" = "Abies procera",
+                          "Non-native willow" = "Salix sp.",
+                          "Norway maple" = "Acer platanoides",       
+                          "Nothofagus all" = "Nothofagus sp.",
+                          "Omorika spruce" = "Picea omorika",         
+                          "Other native willows *" = "Salix sp.",
+                          "Other pines" = "Pinus sp.",
+                          "Other whitebeam"  = "Sorbus aria",       
+                          "Pedunculate oak *" = "Quercus robur",     
+                          "Poplar" = "Populus sp.",
+                          "Red oak" = "Quercus rubra",               
+                          "Rhododendron ponticum +" = "Rhododendron ponticum",
+                          "Scots pine" = "Pinus sylvestris",
+                          "Silver fir" = "Abies alba",
+                          "Snowberry+" = "Symphoricarpos sp.",
+                          "Sweet chestnut" = "Castanea sativa",
+                          "Western hemlock" = "Tsuga heterophylla",
+                          "Western red cedar" = "Thuja plicata",
+                          "Wild service tree" = "Sorbus torminalis",      
+                          "Wych elm *" = "Ulmus glabra",
+                          "English elm" = "Ulmus procera",
+                          "Japanese cedar" = "Cryptomeria japonica",
+                          "Montane willow all *+" = "Salix sp."
+                          )) %>% 
+  # filter non trees
+  mutate(growthform = case_when(str_detect(SPECIES, "\\+") ~ "shrub",
+                                SPECIES %in% c("Japanese knotweed +") ~ "herb",
+                                TRUE ~ "tree")) %>% 
+  filter(growthform == "tree",
+         !species %in% c("Unidentified","")) %>% 
+  # weight species abundance by woodland percentage
+  group_by(sitename, species) %>% 
+  mutate(sp_abun = mean_pct * woodland_percentage) %>% 
+  summarise(spec_abun_b = sum(sp_abun))
+
+# PAWS =  Planted Woods on Ancient Woodland Sites
+canop_c <- canop_c_raw %>% 
+  # select relevant columns
+  dplyr::select(sitename = name, SCPTDATA_I, TYPE, DOM_HABITA, woodland_area = Woodland_area) %>% 
+  # fill in area without woodland
+  mutate(TYPE = if_else(TYPE == "", "Open land habitat", TYPE),
+         # rename site names
+         sitename = str_remove(sitename, "-A")) %>% 
+  # calculate woodland type percentage
+  group_by(sitename) %>% 
+  # calculate percentages
+  mutate(total_area = sum(woodland_area)) %>% 
+  mutate(woodland_percentage = woodland_area/total_area) %>% 
+  # join with species abundance
+  left_join(sp_habitat, by = "DOM_HABITA") %>% 
+  # create column with scientific species name
+  mutate(species = recode(SPECIES, "Common alder*" = "Alnus glutinosa",
+                          "Rowan *" = "Sorbus aucuparia",
+                          "Sitka spruce" = "Picea sitchensis",
+                          "European larch" = "Larix decidua",
+                          "Lodgepole pine" = "Pinus contorta",
+                          "Downy birch *" = "Betula pubescens",
+                          "Scots pine *" = "Pinus sylvestris",
+                          "Hazel *" = "Corylus avellana",
+                          "Eared willow *+" = "Salix aurita", 
+                          "Grey willow *" = "Salix cinerea", 
+                          "Hybrid larch" = "Larix decidua", 
+                          "Shrubs - preferentially browsed +" = "Unidentified",
+                          "Dwarf juniper *+" = "Juniperus communis", 
+                          "Silver birch *" = "Betula pendula", 
+                          "Beech" = "Fagus sylvatica", 
+                          "Lawsons cypress" = "Chamaecyparis lawsoniana", 
+                          "Common alder*" = "Alnus glutinosa", 
+                          "Douglas fir" = "Pseudotsuga menziesii", 
+                          "Yew *" = "Taxus baccata", 
+                          "Upright juniper * +" = "Juniperus communis", 
+                          "Norway spruce" = "Picea abies", 
+                          "Bird cherry *" = "Prunus padus", 
+                          "Intermediate oak *" = "Quercus sp.", 
+                          "Sessile oak *" = "Quercus petraea", 
+                          "Ash *" = "Fraxinus excelsior", 
+                          "Holly *" = "Ilex aquifolium", 
+                          "Aspen *" = "Populus tremula", 
+                          "Goat willow*" = "Salix caprea", 
+                          "Elder *" = "Sambucus nigra", 
+                          "Broom *+" = "Cytisus scoparius", 
+                          "Other non-native trees/shrubs" = "Unidentified", 
+                          "Sycamore" = "Acer pseudoplatanus", 
+                          "Grand fir" = "Abies grandis", 
+                          "Gorse *+" = "Ulex europaeus", 
+                          "Gean wild cherry *" = "Prunus avium",
+                          "Austrian pine" = "Pinus nigra",
+                          "Blackthorn *+" = "Prunus spinosa",
+                          "Birch *" = "Betula sp.",
+                          "Coast redwood" = "Sequoia sempervirens",
+                          "Bramble *+" = "Rubus fruticosus",
+                          "Crab apple" = "Malus sylvestris",
+                          "Dog rose *+" = "Rosa canina",
+                          "Geulder rose *+" = "Viburnum opulus",
+                          "Grey alder" = "Alnus incana",
+                          "Hawthorn *" = "Crataegus monogyna",
+                          "Field maple" = "Acer campestris",
+                          "Hornbeam" = "Carpinus betulsu",               
+                          "Horse chestnut" = "Aesculus hippocastanum",
+                          "Japanese knotweed +" = "Reynoutria japonica",
+                          "Japanese larch" = "Larix kaempferi",
+                          "Leyland cypress" = "Cupressus sp.",        
+                          "Lime all" = "Tilia sp.",
+                          "Noble fir" = "Abies procera",
+                          "Non-native willow" = "Salix sp.",
+                          "Norway maple" = "Acer platanoides",       
+                          "Nothofagus all" = "Nothofagus sp.",
+                          "Omorika spruce" = "Picea omorika",         
+                          "Other native willows *" = "Salix sp.",
+                          "Other pines" = "Pinus sp.",
+                          "Other whitebeam"  = "Sorbus aria",       
+                          "Pedunculate oak *" = "Quercus robur",     
+                          "Poplar" = "Populus sp.",
+                          "Red oak" = "Quercus rubra",               
+                          "Rhododendron ponticum +" = "Rhododendron ponticum",
+                          "Scots pine" = "Pinus sylvestris",
+                          "Silver fir" = "Abies alba",
+                          "Snowberry+" = "Symphoricarpos sp.",
+                          "Sweet chestnut" = "Castanea sativa",
+                          "Western hemlock" = "Tsuga heterophylla",
+                          "Western red cedar" = "Thuja plicata",
+                          "Wild service tree" = "Sorbus torminalis",      
+                          "Wych elm *" = "Ulmus glabra",
+                          "English elm" = "Ulmus procera",
+                          "Japanese cedar" = "Cryptomeria japonica",
+                          "Montane willow all *+" = "Salix sp.",
+                          "Arran whitebeam *" = "Sorbus arranensis"
+         )) %>% 
+  # filter non trees
+  mutate(growthform = case_when(str_detect(SPECIES, "\\+") ~ "shrub",
+                                SPECIES %in% c("Japanese knotweed +") ~ "herb",
+                                TRUE ~ "tree")) %>% 
+  filter(growthform == "tree",
+       !species %in% c("Unidentified","")) %>% 
+  # weight species abundance by woodland percentage
+  group_by(sitename, species) %>% 
+  mutate(sp_abun = mean_pct * woodland_percentage) %>% 
+  summarise(spec_abun_c = sum(sp_abun))
+
+# join df's from both zones
+canop <- canop_b %>% 
+  left_join(canop_c, by = c("sitename","species"))
+```
 
 ```{r calculate vegetation cover}
 veg_cover_bc <- spec_b %>% 
   # remove moss
   filter(!species %in% c("Moss", "Sphagnum", "Polytrichum commune",
                          "Sphagnum squarrosum")) %>% 
-  # calculate avarage species cover per vegetation type using the plots belonging to that vegetation type
+  # calculate average species cover per vegetation type using the plots belonging to that vegetation type
   group_by(sitename, veg_type, species) %>% 
   summarise(abun = mean(abun)) %>% 
   # join with vegetation cover data
-  full_join(veg_type, by = c("sitename", "veg_type")) %>% 
-  # weight species abundance by veg cover
-  mutate(spec_abun_b = abun*veg_cov_b, spec_abun_c = abun*veg_cov_c) %>% 
-  # drop unneeded columns
-  dplyr::select(sitename, veg_type, species, veg_cov_b, veg_cov_c,
-                spec_abun_b,spec_abun_c)
+  full_join(veg_type, by = c("sitename", "veg_type")) 
 
 # print table with missing species data for vegetation types
 missing_vegtype <- veg_cover_bc %>% 
   filter(is.na(species)) %>% 
   group_by(sitename, veg_type) %>% 
   summarise(cov_b = round(sum(veg_cov_b), 2), cov_c = round(sum(veg_cov_c), 2)) %>%
-  filter(!cov_b == 0|!cov_c == 0) 
+  filter(!cov_b == 0 | !cov_c == 0) 
 
 # for missing data, use species data from other plots
 missing <- spec_b %>% 
@@ -201,74 +501,38 @@ missing <- spec_b %>%
   filter(veg_type %in% missing_vegtype$veg_type) %>% 
   group_by(veg_type, species) %>% 
   summarise(abun = mean(abun))
-
 veg_cover_bc_na <- veg_cover_bc %>% 
   filter(is.na(species)) %>%
-  dplyr::select(-species) %>% 
-  left_join(missing, by = "veg_type") %>% 
-  mutate(spec_abun_b = abun*veg_cov_b, spec_abun_c = abun*veg_cov_c) %>% 
-  dplyr::select(sitename, veg_type, species, veg_cov_b, veg_cov_c, spec_abun_b,
-         spec_abun_c)
+  dplyr::select(-species, -abun) %>% 
+  left_join(missing, by = "veg_type") 
 
 veg_cover_bc <-  veg_cover_bc %>% 
   filter(!is.na(species)) %>% 
+  # bind with df with missing veg types
   bind_rows(., veg_cover_bc_na) %>% 
-  arrange(sitename, veg_type, species)
-```
-
-## Zone A
-
-```{r}
-# load data
-spec_a_raw <- read_xlsx("Data/Species_zone_A.xlsx", skip = 1)
-canop_a_raw <- read_xlsx("Data/Canopy_zone_A.xlsx")
-
-canop_a <- canop_a_raw %>% 
-  pivot_longer(-sitename, names_to = "species", values_to = "abun") %>% 
-  mutate(direction = "Canopy", distance = "0-10 meter")
-# Make tidy
-spec_a <- spec_a_raw %>% 
-  pivot_longer(3:19, names_to = "plot", values_to = "abun") %>% 
-  rename(sitename = Site, species = Species) %>% 
-  # remove moss
-  filter(!species %in% c("Moss", "Sphagnum", "Polytrichum commune",
-                         "Sphagnum squarrosum")) %>% 
-  # create direction and distance column
-  mutate(direction = case_when(str_detect(plot, "N") ~ "North",
-                               str_detect(plot, "S") ~ "South",
-                               str_detect(plot, "E") ~ "East",
-                               str_detect(plot, "W") ~ "West",
-                               str_detect(plot, "NE") ~ "Northeast",
-                               str_detect(plot, "NW") ~ "Northwest",
-                               str_detect(plot, "SW") ~ "Southwest",
-                               str_detect(plot, "SE") ~ "Southeast",
-                               plot == "Center" ~ "Center"),
-         distance = case_when(plot %in% c("N...4", "E...5", "S...6","W...7") ~ 
-                                "1.5-3 meter",
-                              plot %in% c("N...8", "E...9", "S...10", "W...11")  ~ 
-                                "3-6 meter",
-                              plot %in% c("N...12","NE","SE","NW","SW", "E...14", "S...16", "W...18") ~ 
-                                "6-10 meter",
-                              plot == "Center" ~ "0 meter")) %>% 
-  bind_rows(canop_a) %>% 
-  # create unique id for plot in site
-  group_by(sitename, direction, distance) %>% 
-  mutate(plot = cur_group_id())  
-  
+  # weight species abundance by veg cover
+  group_by(sitename, species) %>% 
+  mutate(spec_abun_b = abun*veg_cov_b, spec_abun_c = abun*veg_cov_c) %>%
+  summarise(spec_abun_b = sum(spec_abun_b),
+            spec_abun_c = sum(spec_abun_b)) %>% 
+  # bind with tree species data
+  bind_rows(canop) %>% 
+  arrange(sitename, species)
 ```
 
 ## Standardization species names
 
 ```{r standardize species names}
-# load in generalized species list, spelling checked and harmonized with
-# LCVP
+# load in generalized species list, spelling checked and harmonized with LCVP
 harm <- read_xlsx("Data/Harmonization_table_species_names.xlsx") 
 harm <- harm %>% 
   mutate(stand.spec = str_remove(stand.spec, pattern = " sp\\."))
+
 spec_a <- spec_a %>% 
   left_join(harm, by = "species")
 veg_cover_bc <- veg_cover_bc %>% 
-  left_join(harm, by = "species")
+  left_join(harm, by = "species") %>% 
+  filter(!is.na(stand.spec))
 
 saveRDS(veg_cover_bc, "RDS_files/01_Species_abundance_bc.rds")
 saveRDS(spec_a, "RDS_files/01_Species_abundance_a.rds")
@@ -424,7 +688,7 @@ missing_vegtype <- spec_cover %>%
   group_by(sitename, LABEL_DE) %>% 
   summarise(cov_b = round(sum(veg_cov_b), 2), 
             cov_c = round(sum(veg_cov_c), 2)) %>%
-  filter(!cov_b == 0|!cov_c == 0) 
+  filter(!cov_b == 0 |!cov_c == 0) 
 
 # for missing data, use species data from other plots
 missing <- bdm_sp %>% 
