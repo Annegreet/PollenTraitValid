@@ -21,10 +21,10 @@
 ## ---------------------------
 
 ## Load packages
-if(!require(tidyverse)) install.packages("tidyverse")
-if(!require(data.table)) install.packages("data.table")
-if(!require(LCVP)) install.packages("LCVP")
-if(!require(lcvplants)) install.packages("lcvplants")
+if (!require(tidyverse)) install.packages("tidyverse")
+if (!require(data.table)) install.packages("data.table")
+if (!require(LCVP)) install.packages("LCVP")
+if (!require(lcvplants)) install.packages("lcvplants")
 
 # increase memory limit
 memory.limit(999999)
@@ -115,78 +115,78 @@ deadID <- meta %>%
 #subset plant that were not measured in natural conditions
 #get list of observations that were not in natural settings
 setting <- meta %>%
-  mutate(drop = ifelse(OrigValueStr == "Botanical garden"|
-                         OrigValueStr == "botanical garden (Bergius Botanical Garden, Stockholm, Sweden)"|
-                         OrigValueStr == "Botanical gardens, greenhouses and other atypical habitats"|
-                         OrigValueStr == "Chamber"|
-                         OrigValueStr == "climate chamber"|
-                         OrigValueStr == "Climate chamber"|
-                         OrigValueStr == "Climate Chamber"|
-                         OrigValueStr == "Climate chamber, non-limiting conditions, (cf. dataset reference)"|
-                         OrigValueStr == "climate chambers"|
-                         OrigValueStr == "Common Garden"|
-                         OrigValueStr == "Controlled climate chamber"|
-                         OrigValueStr == "controlled environment room"|
-                         OrigValueStr == "drought treatment"|
-                         OrigValueStr == "FACE"|
-                         OrigValueStr == "FE"|
-                         OrigValueStr == "C"|
-                         OrigValueStr == "Field Experiment"|
-                         OrigValueStr == "FW"|
-                         OrigValueStr == "G"|
-                         OrigValueStr == "GH"|
-                         OrigValueStr == "Glasshouse"|
-                         OrigValueStr == "Greehouse"|
-                         OrigValueStr == "Green house"|
-                         OrigValueStr == "greenhouse"|
-                         OrigValueStr == "Greenhouse"|
-                         OrigValueStr == "Greenhouse, grrowth container"|
-                         OrigValueStr == "groth chamber"|
-                         OrigValueStr == "growth-chamber"|
-                         OrigValueStr == "growth chamber"|
-                         OrigValueStr == "Growth chamber"|
-                         OrigValueStr == "Growth Chamber"|
-                         OrigValueStr == "growth chambers"|
-                         OrigValueStr == "Growth chambers"|
-                         OrigValueStr == "Growth exp"|
-                         OrigValueStr == "hydroponic"|
-                         OrigValueStr == "Irrigation"|
-                         OrigValueStr == "Irrigation and N fertilisation (100 kg/ha)"|
-                         OrigValueStr == "LAU_Ploughed/mown"|
-                         OrigValueStr == "LAU_Ploughed/mown and fertilized"|
-                         OrigValueStr == "mesocosm"|
-                         OrigValueStr == "mini-ecosystem"|
-                         OrigValueStr == "N"|
-                         OrigValueStr == "natural environment, high warming +4C, preccipitation ambient"|
-                         OrigValueStr == "natural environment, high warming +4C, preccipitation ambient -50%"|
-                         OrigValueStr == "natural environment, high warming +4C, preccipitation ambient +50%"|
-                         OrigValueStr == "natural environment, low warming +1.5C, preccipitation ambient"|
-                         OrigValueStr == "natural environment, low warming +1.5C, preccipitation ambient -50%"|
-                         OrigValueStr == "natural environment, low warming +1.5C, preccipitation ambient +50%"|
-                         OrigValueStr == "natural environment, medium warming +2.5C, preccipitation ambient"|
-                         OrigValueStr == "natural environment, medium warming +2.5C, preccipitation ambient -50%"|
-                         OrigValueStr == "natural environment, medium warming +2.5C, preccipitation ambient +50%"|
-                         OrigValueStr == "natural environment, no warming, preccipitation ambient -50%"|
-                         OrigValueStr == "natural environment, no warming, preccipitation ambient +50%"|
-                         OrigValueStr == "natural grassland, experimental nutrient NP addition"|
-                         OrigValueStr == "nutrient addition experiment"|
-                         OrigValueStr == "Open Top"|
-                         OrigValueStr == "open-top chamber"|
-                         OrigValueStr == "Open top chambers"|
-                         OrigValueStr == "OTC"|
-                         OrigValueStr == "plantation"|
-                         OrigValueStr == "PM"|
-                         OrigValueStr == "pot"|
-                         OrigValueStr == "Pot-grown"|
-                         OrigValueStr == "Pots outside"|
-                         OrigValueStr == "pots, outside in natural environment"|
-                         OrigValueStr == "shade houses"|
-                         OrigValueStr == "university campus"|
-                         OrigValueStr == "Uzbekistan: Irrigated desert land"|
-                         OrigValueStr == "VER_permanent extensively mown meadow"|
-                         OrigValueStr == "VER_permanent meadow mown and fertilized"|
-                         OrigValueStr == "VER_permanent meadows mown and fertilized"|
-                         OrigValueStr == "water stress experiment"|
+  mutate(drop = ifelse(OrigValueStr == "Botanical garden" |
+                         OrigValueStr == "botanical garden (Bergius Botanical Garden, Stockholm, Sweden)" |
+                         OrigValueStr == "Botanical gardens, greenhouses and other atypical habitats" |
+                         OrigValueStr == "Chamber" |
+                         OrigValueStr == "climate chamber" |
+                         OrigValueStr == "Climate chamber" |
+                         OrigValueStr == "Climate Chamber" |
+                         OrigValueStr == "Climate chamber, non-limiting conditions, (cf. dataset reference)" |
+                         OrigValueStr == "climate chambers" |
+                         OrigValueStr == "Common Garden" |
+                         OrigValueStr == "Controlled climate chamber" |
+                         OrigValueStr == "controlled environment room" |
+                         OrigValueStr == "drought treatment" |
+                         OrigValueStr == "FACE" |
+                         OrigValueStr == "FE" |
+                         OrigValueStr == "C" |
+                         OrigValueStr == "Field Experiment" |
+                         OrigValueStr == "FW" |
+                         OrigValueStr == "G" |
+                         OrigValueStr == "GH" |
+                         OrigValueStr == "Glasshouse" |
+                         OrigValueStr == "Greehouse" |
+                         OrigValueStr == "Green house" |
+                         OrigValueStr == "greenhouse" |
+                         OrigValueStr == "Greenhouse" |
+                         OrigValueStr == "Greenhouse, grrowth container" |
+                         OrigValueStr == "groth chamber" |
+                         OrigValueStr == "growth-chamber" |
+                         OrigValueStr == "growth chamber" |
+                         OrigValueStr == "Growth chamber" |
+                         OrigValueStr == "Growth Chamber" |
+                         OrigValueStr == "growth chambers" |
+                         OrigValueStr == "Growth chambers" |
+                         OrigValueStr == "Growth exp" |
+                         OrigValueStr == "hydroponic" |
+                         OrigValueStr == "Irrigation" |
+                         OrigValueStr == "Irrigation and N fertilisation (100 kg/ha)" |
+                         OrigValueStr == "LAU_Ploughed/mown" |
+                         OrigValueStr == "LAU_Ploughed/mown and fertilized" |
+                         OrigValueStr == "mesocosm" |
+                         OrigValueStr == "mini-ecosystem" |
+                         OrigValueStr == "N" |
+                         OrigValueStr == "natural environment, high warming +4C, preccipitation ambient" |
+                         OrigValueStr == "natural environment, high warming +4C, preccipitation ambient -50%" |
+                         OrigValueStr == "natural environment, high warming +4C, preccipitation ambient +50%" |
+                         OrigValueStr == "natural environment, low warming +1.5C, preccipitation ambient" |
+                         OrigValueStr == "natural environment, low warming +1.5C, preccipitation ambient -50%" |
+                         OrigValueStr == "natural environment, low warming +1.5C, preccipitation ambient +50%" |
+                         OrigValueStr == "natural environment, medium warming +2.5C, preccipitation ambient" |
+                         OrigValueStr == "natural environment, medium warming +2.5C, preccipitation ambient -50%" |
+                         OrigValueStr == "natural environment, medium warming +2.5C, preccipitation ambient +50%" |
+                         OrigValueStr == "natural environment, no warming, preccipitation ambient -50%" |
+                         OrigValueStr == "natural environment, no warming, preccipitation ambient +50%" |
+                         OrigValueStr == "natural grassland, experimental nutrient NP addition" |
+                         OrigValueStr == "nutrient addition experiment" |
+                         OrigValueStr == "Open Top" |
+                         OrigValueStr == "open-top chamber" |
+                         OrigValueStr == "Open top chambers" |
+                         OrigValueStr == "OTC" |
+                         OrigValueStr == "plantation" |
+                         OrigValueStr == "PM" |
+                         OrigValueStr == "pot" |
+                         OrigValueStr == "Pot-grown" |
+                         OrigValueStr == "Pots outside" |
+                         OrigValueStr == "pots, outside in natural environment" |
+                         OrigValueStr == "shade houses" |
+                         OrigValueStr == "university campus" |
+                         OrigValueStr == "Uzbekistan: Irrigated desert land" |
+                         OrigValueStr == "VER_permanent extensively mown meadow" |
+                         OrigValueStr == "VER_permanent meadow mown and fertilized" |
+                         OrigValueStr == "VER_permanent meadows mown and fertilized" |
+                         OrigValueStr == "water stress experiment" |
                          OrigValueStr == "water treatment", 1, 0)) %>%
   select(ObsDataID, drop, ObservationID) %>%
   unique()
@@ -256,7 +256,7 @@ saveRDS(trait5, "RDS_files/01_Clean_TRY_data.rds")
 trait_sp <- trait5$stand.spec %>% unique
 misspec <-
   pol_sp[!pol_sp %in% trait_sp] %>%
-  sort %>% unique %>% length()/length(pol_sp) *100
+  sort %>% unique %>% length()/length(pol_sp) * 100
 misspec
 
 # join with pollen translation table
@@ -264,21 +264,46 @@ trait6 <- trait5 %>%
   left_join(spec, by = "stand.spec")
 
 saveRDS(trait6, "RDS_files/01_TRY_raw_traits.rds")
-#trait6 <- readRDS("RDS_files/01_TRY_raw_traits.rds")
+# trait6 <- readRDS("RDS_files/01_TRY_raw_traits.rds")
 
 sum_trait <- trait6  %>% 
   filter(!is.na(pollentaxon)) %>% 
   group_by(pollentaxon) %>% 
   summarise(nspec = length(unique(stand.spec)),
-    nobs = across(c(LeafN,LeafP,LDMC,SLA,LA,PlantHeight),~sum(!is.na(.))))
+            nobs = across(c(SLA,LA,PlantHeight),~sum(!is.na(.)))) %>% 
+  unnest(nobs) %>% 
+  filter(pollentaxon %in% c("Betula", "Carpinus betulus", "Cyperaceae", 
+                            "Ericales (tetrad)", "Juniperus", "Pinus", 
+                            "Poaceae", "Pteridophyte", "Ranunculaceae", 
+                            "Alnus", "Caryophyllaceae", "Rosaceae", 
+                            "Lamiaceae", "Rubiaceae", "Malvaceae", 
+                            "Plantago", "Viola", "Apiaceae", "Asteraceae", 
+                            "Picea", "Salix", "Geraniaceae", "Fraxinus", "Urtica",
+                            "Ulmus", "Acer", "Larix", "Abies", "Corylus", "Epilobium",
+                            "Quercus", "Rumex/Oxyria", "Castanea", "Frangula alnus", 
+                            "Juglans", "Tilia", "Fabaceae", "Lonicera", "Solanum",
+                            "Populus", "Veronica", "Convolvulaceae" ))
+
 
 saveRDS(sum_trait,"RDS_files/01_summary_table_TRY_data.rds")          
 
 trait_val <- trait6  %>% 
   filter(!is.na(pollentaxon)) %>% 
   group_by(pollentaxon) %>% 
-  summarise(across(c(LeafN,LeafP,LDMC,SLA,LA,PlantHeight), 
-                   ~paste(round(mean(., na.rm = TRUE), 1), "+-", round(sd(., na.rm = TRUE), 2))))
+  summarise(across(c(SLA,LA,PlantHeight), 
+                   ~paste(round(mean(., na.rm = TRUE), 1), "+-", 
+                          round(sd(., na.rm = TRUE), 2)))) %>% 
+  filter(pollentaxon %in% c("Betula", "Carpinus betulus", "Cyperaceae", 
+                          "Ericales (tetrad)", "Juniperus", "Pinus", 
+                          "Poaceae", "Pteridophyte", "Ranunculaceae", 
+                          "Alnus", "Caryophyllaceae", "Rosaceae", 
+                          "Lamiaceae", "Rubiaceae", "Malvaceae", 
+                          "Plantago", "Viola", "Apiaceae", "Asteraceae", 
+                          "Picea", "Salix", "Geraniaceae", "Fraxinus", "Urtica",
+                          "Ulmus", "Acer", "Larix", "Abies", "Corylus", "Epilobium",
+                          "Quercus", "Rumex/Oxyria", "Castanea", "Frangula alnus", 
+                          "Juglans", "Tilia", "Fabaceae", "Lonicera", "Solanum",
+                          "Populus", "Veronica", "Convolvulaceae" ))
 saveRDS(trait_val,"RDS_files/01_TRY_data_values.rds")          
 
         
