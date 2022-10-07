@@ -28,7 +28,8 @@ if (!require(tidyverse)) install.packages("tidyverse")
 if (!require(rjags)) install.packages("rjags")
 if (!require(runjags)) install.packages("runjags")
 if (!require(furrr)) install.packages("furrr")
-  
+if (!require(broom)) install.packages("broom")  
+
 # load PFT summary table
 # filter sites with to little vegetation cover of particular type
 sum <- readRDS("RDS_files/01_Percentage_cover_pft.rds")
@@ -44,8 +45,9 @@ traits <- c("LA","SLA","PlantHeight")
 pollen_files <- list.files("RDS_files/") %>% 
   str_subset(pattern = "03_CWM_estimates_") %>% 
   str_subset(paste(traits, collapse = "|")) %>% 
-  str_subset(pattern = "pollen") 
-  
+  str_subset(pattern = "pollen") %>% 
+  str_subset(pattern = "gapfilled", negate = TRUE)
+
 pollen_lab <- pollen_files %>% 
   str_subset(paste(traits, collapse = "|")) %>% 
   str_remove(., "03_CWM_estimates_") %>% 
@@ -54,7 +56,10 @@ pollen_lab <- pollen_files %>%
 veg_files <- list.files("RDS_files/") %>% 
   str_subset(pattern = "03_CWM_estimates_") %>% 
   str_subset(paste(traits, collapse = "|")) %>% 
-  str_subset(pattern = "pollen", negate = TRUE)
+  str_subset(pattern = "pollen", negate = TRUE) %>% 
+  str_subset(pattern = "gapfilled", negate = TRUE) %>% 
+  str_subset(pattern = "TRY", negate = TRUE)
+
 veg_lab <- veg_files %>% 
   str_subset(paste(traits, collapse = "|")) %>% 
   str_remove(., "03_CWM_estimates_") %>% 
@@ -81,9 +86,10 @@ dfCWM_pol <- pollen_files %>%
          sitename = str_remove(sitename, "X")
          ) %>% 
   dplyr::select(country, sitename, pollen_mean = Mean, 
-                pollen_sd = SD, trait, correction, pollination, growthform) 
+                pollen_sd = SD, trait, correction, pollination, growthform) %>% 
   # convert to original scale
-  # mutate(across(c("pollen_mean", "pollen_sd"), ~exp(.)))
+  mutate(across(c("pollen_mean", "pollen_sd"), ~exp(.))) %>% 
+  filter(country == "Scotland") 
 
 dfCWM_veg <- veg_files %>% 
   folderpath.fun(.) %>% 
@@ -103,21 +109,20 @@ dfCWM_veg <- veg_files %>%
   # see sites in df dropsites
   filter(!(growthform == "trsh" & zone == "zoneA"), # Too little sites with tree cover in zone A
          !(growthform == "trsh" & zone == "zoneB" & sitename %in% c("C004","C005","C006", "C013")),
-         !(growthform == "trsh" & zone == "zoneC" & sitename %in% c("647182", "C006","C015")),
-         !(pollination == "wind" & zone == "zoneA" & sitename %in% c("665174", "C009","C015")),
-         !(pollination == "not wind" & zone == "zoneA" & sitename %in% c("563166"))) %>% 
+         !(growthform == "trsh" & zone == "zoneC" & sitename %in% c("C006","C015")),
+         !(pollination == "wind" & zone == "zoneA" & sitename %in% c("C009","C015"))) %>% 
   # convert to original scale
-  # mutate(across(c("veg_mean", "veg_sd"), ~exp(.))) %>% 
-  # combine to facilitate mapping
-  mutate(zone = paste(country, zone)) %>% 
-  filter(!sitename == "563186")
+  mutate(across(c("veg_mean", "veg_sd"), ~exp(.))) %>% 
+  filter(country == "Scotland") 
+ 
 
 #Save compiled data
-saveRDS(dfCWM_pol, "RDS_files/04_CWM_estimates_pollen.rds") 
-saveRDS(dfCWM_veg, "RDS_files/04_CWM_estimates_vegetation.rds") 
+# saveRDS(dfCWM_pol, "RDS_files/04_CWM_estimates_pollen_Scotland.rds") 
+# saveRDS(dfCWM_veg, "RDS_files/04_CWM_estimates_vegetation_Scotland.rds") 
 
-selectedzone <- combo$zone[7]
-selectedtrait <- combo$trait[7]
+selectedtrait <- "LA"
+selectedzone <- "zoneA"
+
 
 cor_bay <- function(cwm, selectedzone, selectedtrait, selectedtreatment){
   CWM <- cwm %>% 
@@ -130,13 +135,14 @@ cor_bay <- function(cwm, selectedzone, selectedtrait, selectedtreatment){
   CWM_sd <- CWM %>%
     ungroup() %>%
     dplyr::select(pollen_sd, veg_sd) %>% 
-    as.matrix()
+    as.matrix() 
   N <- nrow(CWM_mean)
   
   model_string <- "
     model {
       for(i in 1:N) {
-        CWM_mean[i,1:2] ~ dmt(mu[], prec[,,i], df)
+        # CWM_mean[i,1:2] ~ dmt(mu[], prec[,,i], df)
+        CWM_mean[i,1:2] ~ dmnorm(mu[], prec[,,i])
       }
   
       # Constructing the covariance matrix and the corresponding precision matrix.
@@ -154,19 +160,19 @@ cor_bay <- function(cwm, selectedzone, selectedtrait, selectedtreatment){
       mu[2] ~ dnorm(0, 0.0001)
       df ~ dexp(1/30) # df of t distribution, Values of d) larger than about 30.0 make the t distribution roughly normal
   
-      # Generate random draws from the estimated bivariate normal distribution
-      for(i in 1:N){
-        x_rand[i,1:2] ~ dmt(mu[], prec[,,i], df)
-        }
       #data# N, CWM_mean, CWM_sd
-      #monitor# rho, df
+      #monitor# rho, mu
+      #inits# mu
     }"
   
-  
-  inits_list <-  list(mu = c(min(CWM_mean)*0.1, max(CWM_mean)*10),
-                    rho = cor(CWM_mean[, 1], CWM_mean[, 2]))
-  
-  results <- run.jags(model_string, inits = inits_list)
+  rho <- list(chain1 = -1, chain2 = 0, chain3 = 1)
+  df <- list(chain1 = 1/1, chain2 = 1/15, chain3 = 1/30)
+  mu <- list(chain1 = c(mean(CWM_mean[,1]),mean(CWM_mean[,2])),
+             chain2 = c(mean(CWM_mean[,1]),mean(CWM_mean[,2]))*10,
+             chain3 = c(mean(CWM_mean[,1]),mean(CWM_mean[,2]))*0.01)
+  # 
+  results <- run.jags(model_string, n.chains = 3)
+  plot(results)
   
   plot(results, file = paste0("Convergence_diagnostics/Conv_rho_",selectedtrait,
                               "_", selectedzone,"_",selectedtreatment, ".pdf" ))  
@@ -185,6 +191,41 @@ names(trait_lab) <- c("LA", "PlantHeight","SLA")
 zone_lab <- c("Inner ring", "Middle ring", "Outer ring")
 names(zone_lab) <- c("zoneA","zoneB","zoneC")
 
+## Plotting function
+corrplot <- function(rhos,nobs,labels){
+   rhos %>% 
+    # get rid of estimates of mu and df
+     filter(parameter == "rho") %>% 
+    # make sure the order of zones is right
+     mutate(zone = fct_relevel(zone, "zoneC", "zoneB","zoneA")) %>% 
+     ggplot(aes(x = zone, y = Mean, fill = treatment)) + 
+     # geoms
+     geom_hline(yintercept = 0, linetype = "dotted") +
+     geom_errorbar(aes(ymin = Lower95, ymax = Upper95), width = .1,
+                   position = position_dodge(0.5)) +
+     geom_point(shape = 21, size = 2, position = position_dodge(0.5)) +
+     # labels and scales
+     scale_x_discrete("", labels = c("zoneA" = "Zone A", 
+                                     "zoneB" = "Zone B", 
+                                     "zoneC"  = "Zone C")) +
+     scale_y_continuous("", limits = c(-1,1)) +
+     scale_fill_manual("", values = c("darkorange", "purple", "cyan4"),
+                       labels = labels) +
+     coord_flip() +
+     # Faceting
+     facet_grid(~trait, labeller = labeller(trait = trait_lab)) +
+     # Number of observations
+     # geom_text(data = nobs, aes(x = x, y = Mean,label = label), 
+     #           nudge_x = 0.25, size = 2, inherit.aes = FALSE) +
+     # Theme
+     theme_bw() +
+     theme(text = element_text(size = 12),
+           strip.background = element_rect(fill = "white"),
+           legend.position = "bottom",
+           legend.margin = margin(-25,0,0,0))
+}
+  
+
 ## No correction + correction----
 # No correction
 cwm <- dfCWM_pol %>% 
@@ -198,7 +239,7 @@ combo <- cwm %>%
   distinct()
 
 if (Sys.info()[4] == "LUIN67311") {  
-  plan(multisession, workers = 2)
+  plan(multisession, workers = 1)
 } else {
   plan(multisession, workers = 6)
 }
@@ -216,58 +257,30 @@ cwm2 <- dfCWM_pol %>%
 rhos2 <- purrr::map2_dfr(combo$zone, combo$trait, 
                          ~cor_bay(cwm2, selectedzone = .x, selectedtrait = .y,
                                   selectedtreatment =  "correction")) %>% 
-  bind_rows(rhos) %>% 
-  mutate(country = word(zone,1), zone = word(zone,2)) %>% 
-  # reorder factors
-  mutate(treatment = factor(treatment, levels = c("no correction", "correction")),
-         country = factor(country, levels = c("Scotland", "Switzerland")))
+  bind_rows(rhos) 
 # df with number of observations 
 nobs <- cwm2 %>% 
   bind_rows(cwm) %>% 
-  mutate(country = word(zone,1), zone = word(zone,2)) %>% 
-  group_by(trait, country, zone, correction) %>% 
+  group_by(trait, zone, correction) %>% 
   summarise(label = n(), .groups = "keep") %>% 
-  left_join(rhos2, by = c("trait", "country", "zone", "correction" = "treatment")) %>% 
-  dplyr::select(label, country, zone, trait, Mean, treatment = "correction") %>% 
+  left_join(rhos2[rhos2$parameter == "rho", ], by = c("trait",  "zone", "correction" = "treatment")) %>% 
+  dplyr::select(label,  zone, trait, Mean, treatment = "correction") %>% 
   ungroup() %>% 
-  arrange(zone,trait, country) %>% 
-  mutate(x = rep(c(1,0.75,2,1.75), 9))
-  
-  
-(p_rho <- ggplot(rhos2, aes(x = country, y = Mean, fill = treatment)) + 
-    # geoms
-    geom_hline(yintercept = 0, linetype = "dotted") +
-    geom_errorbar(aes(ymin = Lower95, ymax = Upper95), width = .1,
-                  position = position_dodge(0.5)) +
-    geom_point(shape = 21, size = 2, position = position_dodge(0.5)) +
-    # labels and scales
-    scale_x_discrete("") +
-    scale_y_continuous("", limits = c(-1,1)) +
-    scale_fill_manual("", values = c("darkorange", "purple"),
-                      labels = c("Correction", "No correction")) +
-    coord_flip() +
-    # Faceting
-    facet_grid(zone~trait, labeller = labeller(trait = trait_lab,
-                                               zone = zone_lab)) +
-    # Number of observations
-    geom_text(data = nobs, aes(x = x, y = Mean,label = label), 
-              nudge_x = 0.25, size = 2, inherit.aes = FALSE) +
-    # Theme
-    theme_bw() +
-    theme(text = element_text(size = 12),
-          strip.background = element_rect(fill = "white"),
-          legend.position = "bottom",
-          legend.margin = margin(-25,0,0,0))
-    ) 
+  arrange(trait) %>% 
+  mutate(x = rep(c(0.75,1,1.75,2,2.75,3), 3))
 
-ggsave("Figures/Pollen_correction_factors.png", p_rho, width = 7, height = 7)
+# plot
+p_rho <- corrplot(rhos2, nobs, c("correction" = "Correction",
+                                 "no correction" = "No correction")) 
+
+ggsave("Figures/Pollen_correction_factors.png", p_rho, width = 7, height = 3)
 
 ## Pollination mode ----
 # Wind
 cwm_wind <- dfCWM_pol %>% 
   filter(growthform == "allpft",
          pollination == "wind",
-         correction == "no correction") %>% 
+         correction == "correction") %>% 
   left_join(dfCWM_veg, by = c("country", "sitename", "trait", "growthform", "pollination")) %>% 
   filter(taxres == "stand.spec")
 rhos_wind <- furrr::future_map2_dfr(combo$zone, combo$trait, 
@@ -277,64 +290,37 @@ rhos_wind <- furrr::future_map2_dfr(combo$zone, combo$trait,
 cwm_nowind <- dfCWM_pol %>% 
   filter(growthform == "allpft",
          pollination == "not wind",
-         correction == "no correction") %>% 
+         correction == "correction") %>% 
   left_join(dfCWM_veg, by = c("country", "sitename", "trait", "growthform", "pollination")) %>% 
   filter(taxres == "stand.spec")
 
 rhos_pol <- furrr::future_map2_dfr(combo$zone, combo$trait, 
                          ~cor_bay(cwm_nowind, selectedzone = .x, selectedtrait = .y,
                                   selectedtreatment =  "not wind")) %>% 
-  bind_rows(rhos_wind) %>% 
-  mutate(country = word(zone,1), zone = word(zone,2)) %>% 
-  # reorder factors
-  mutate(country = factor(country, levels = c("Scotland", "Switzerland")))
+  bind_rows(rhos_wind) 
+
 # df with number of observations 
 nobs_pol <- cwm_nowind %>% 
   bind_rows(cwm_wind) %>% 
-  mutate(country = word(zone,1), zone = word(zone,2)) %>% 
-  group_by(trait, country, zone, pollination) %>% 
+  group_by(trait, zone, pollination) %>% 
   summarise(label = n(), .groups = "keep") %>% 
-  left_join(rhos_pol, by = c("trait", "country", "zone", "pollination" = "treatment")) %>% 
-  dplyr::select(label, country, zone, trait, Mean, treatment = "pollination") %>% 
+  left_join(rhos_pol[rhos_pol$parameter == "rho", ],
+            by = c("trait",  "zone", "pollination" = "treatment")) %>% 
+  dplyr::select(label,  zone, trait, Mean, treatment = "pollination") %>% 
   ungroup() %>% 
-  arrange(zone, trait, country, desc(treatment)) %>% 
-  mutate(x = rep(c(1,0.75,2,1.75), 9))
+  arrange(trait) %>% 
+  mutate(x = rep(c(0.75,1,1.75,2,2.75,3), 3))
 
-
-(p_rho <- ggplot(rhos_pol, aes(x = country, y = Mean, fill = treatment)) + 
-    # geoms
-    geom_hline(yintercept = 0, linetype = "dashed") +
-    geom_errorbar(aes(ymin = Lower95, ymax = Upper95), width = .1,
-                  position = position_dodge(0.5)) +
-    geom_point(shape = 21, size = 2, position = position_dodge(0.5)) +
-    # labels and scales
-    scale_x_discrete("") +
-    scale_y_continuous("", limits = c(-1,1)) +
-    scale_fill_manual("", values = c("darkorange", "purple"),
-                      labels = c("Not wind pollinated", "Wind pollinated")
-                      ) +
-    coord_flip() +
-    # Faceting
-    facet_grid(zone~trait, labeller = labeller(trait = trait_lab,
-                                               zone = zone_lab)) +
-    # Number of observations
-    geom_text(data = nobs_pol, aes(x = x, y = Mean,label = label), 
-              nudge_x = 0.25, size = 2, inherit.aes = FALSE) +
-    # Theme
-    theme_bw() +
-    theme(text = element_text(size = 12),
-          strip.background = element_rect(fill = "white"),
-          legend.position = "bottom",
-          legend.margin = margin(-25,0,0,0))
-) 
-ggsave("Figures/Pollination_mode.png", p_rho, width = 7, height = 7)
+p_rho <- corrplot(rhos_pol, nobs_pol, c( "wind" = "Wind pollinated",
+                                         "not wind" = "Not wind pollinated"))
+ggsave("Figures/Pollination_mode.png", p_rho, width = 7, height = 3)
 
 ## Plant functional type ----
 # Trees and Shrubs
 cwm_trsh <- dfCWM_pol %>% 
   filter(growthform == "trsh",
          pollination == "allpol",
-         correction == "no correction") %>% 
+         correction == "correction") %>% 
   left_join(dfCWM_veg, by = c("country", "sitename", "trait", "growthform", "pollination")) %>% 
   filter(taxres == "stand.spec")
 combo_trsh <- cwm_trsh %>% 
@@ -347,57 +333,28 @@ rhos_trsh <- furrr::future_map2_dfr(combo$zone, combo$trait,
 cwm_herb <- dfCWM_pol %>% 
   filter(growthform == "herb",
          pollination == "allpol",
-         correction == "no correction") %>% 
+         correction == "correction") %>% 
   left_join(dfCWM_veg, by = c("country","sitename", "trait", "growthform", "pollination")) %>% 
   filter(taxres == "stand.spec")
 
 rhos_pft <- furrr::future_map2_dfr(combo$zone, combo$trait, 
                             ~cor_bay(cwm_herb, selectedzone = .x, selectedtrait = .y,
                                      selectedtreatment =  "herb")) %>% 
-  bind_rows(rhos_trsh) %>% 
-  mutate(country = word(zone,1), zone = word(zone,2)) %>% 
-  # reorder factors
-  mutate(country = factor(country, levels = c("Scotland", "Switzerland")))
+  bind_rows(rhos_trsh) 
 # df with number of observations 
 nobs_pft <- cwm_herb %>% 
   bind_rows(cwm_trsh) %>% 
-  mutate(country = word(zone,1), zone = word(zone,2)) %>% 
-  group_by(trait, country, zone, growthform) %>% 
+  group_by(trait, zone, growthform) %>% 
   summarise(label = n(), .groups = "keep") %>% 
-  left_join(rhos_pft, by = c("trait", "country", "zone", "growthform" = "treatment")) %>% 
-  dplyr::select(label, country, zone, trait, Mean, treatment = "growthform") %>% 
+  left_join(rhos_pft[rhos_pft$parameter == "rho", ],
+            by = c("trait",  "zone", "growthform" = "treatment")) %>% 
+  dplyr::select(label,  zone, trait, Mean, treatment = "growthform") %>% 
   ungroup() %>% 
-  arrange(zone,trait, country) %>% 
-  mutate(x = rep(c(1,0.75,2,1.75), 9))
+  arrange(trait) %>% 
+  mutate(x = rep(c(0.75,1,1.75,2,3), 3))
 
-
-(p_rho <- ggplot(rhos_pft, aes(x = country, y = Mean, fill = treatment)) + 
-    # geoms
-    geom_hline(yintercept = 0) +
-    geom_errorbar(aes(ymin = Lower95, ymax = Upper95), width = .1,
-                  position = position_dodge(0.5)) +
-    geom_point(shape = 21, size = 2, position = position_dodge(0.5)) +
-    # labels and scales
-    scale_x_discrete("") +
-    scale_y_continuous("", limits = c(-1,1)) +
-    scale_fill_manual("", values = c("darkorange", "purple"),
-                      #labels = c("Wind pollinated", "Not wind pollinated")
-    ) +
-    coord_flip() +
-    # Faceting
-    facet_grid(zone~trait, labeller = labeller(trait = trait_lab,
-                                               zone = zone_lab)) +
-    # Number of observations
-    geom_text(data = nobs, aes(x = x, y = Mean,label = label), 
-              nudge_x = 0.25, size = 2, inherit.aes = FALSE) +
-    # Theme
-    theme_bw() +
-    theme(text = element_text(size = 10),
-          strip.background = element_rect(fill = "white"),
-          legend.position = "bottom",
-          legend.margin = margin(-25,0,0,0))
-) 
-ggsave("Figures/PFT.png", p_rho, width = 7, height = 7)
+p_rho <- corrplot(rhos_pft, nobs_pft, c("trsh" = "Woody", "herb" = "Non-Woody"))
+ggsave("Figures/PFT.png", p_rho, width = 7, height = 3)
 
 ## Taxonomic resolution ----
 # Species
@@ -426,50 +383,25 @@ rhos_taxres <- furrr::future_map2_dfr(combo$zone, combo$trait,
                             ~cor_bay(cwm_fam, selectedzone = .x, selectedtrait = .y,
                                      selectedtreatment =  "family")) %>% 
   bind_rows(rhos_gen) %>%
-  bind_rows(rhos_sp) %>% 
-  mutate(country = word(zone,1), zone = word(zone,2)) %>% 
-  # reorder factors
-  mutate(country = factor(country, levels = c("Scotland", "Switzerland")))
+  bind_rows(rhos_sp) 
+
 # df with number of observations 
 nobs_taxres <- cwm_fam %>% 
   bind_rows(cwm_gen) %>% 
   bind_rows(cwm_sp) %>% 
-  mutate(country = word(zone,1), zone = word(zone,2)) %>% 
-  group_by(trait, country, zone, taxres) %>% 
+  group_by(trait, zone, taxres) %>% 
   summarise(label = n(), .groups = "keep") %>% 
-  left_join(rhos_taxres, by = c("trait", "country", "zone", "taxres" = "treatment")) %>% 
-  dplyr::select(label, country, zone, trait, Mean, treatment = "taxres") %>% 
+  left_join(rhos_taxres[rhos_taxres$parameter == "rho", ], by = c("trait",  "zone", "correction" = "treatment")) %>% 
+  dplyr::select(label,  zone, trait, Mean, treatment = "taxres") %>% 
   ungroup() %>% 
-  arrange(zone, trait, country,treatment) %>% 
-  mutate(x = rep(c(0.8,1,1.15,1.8,2,2.15), 9))
+  arrange(trait) %>% 
+  mutate(x = rep(c(0.75,1,1.75,2,2.75,3), 3))
 
-(p_rho <- ggplot(rhos_taxres, aes(x = country, y = Mean, fill = treatment)) + 
-    # geoms
-    geom_hline(yintercept = 0, linetype = "dashed") +
-    geom_errorbar(aes(ymin = Lower95, ymax = Upper95), width = .1,
-                  position = position_dodge(0.5)) +
-    geom_point(shape = 21, size = 2, position = position_dodge(0.5)) +
-    # labels and scales
-    scale_x_discrete("") +
-    scale_y_continuous("", limits = c(-1,1)) +
-    scale_fill_manual("", values = c("darkorange", "purple", "cyan4"),
-                        labels = c("Family", "Genus", "Species")
-                      ) +
-    coord_flip() +
-    # Faceting
-    facet_grid(zone~trait, labeller = labeller(trait = trait_lab,
-                                               zone = zone_lab)) +
-    # Number of observations
-    geom_text(data = nobs_taxres, aes(x = x, y = Mean, label = label),
-              nudge_x = 0.1, size = 2, inherit.aes = FALSE) +
-    # Theme
-    theme_bw() +
-    theme(text = element_text(size = 12),
-          strip.background = element_rect(fill = "white"),
-          legend.position = "bottom",
-          legend.margin = margin(-25,0,0,0))
-) 
-ggsave("Figures/Taxonomic_resolution.png", p_rho, width = 7, height = 7)
+p_rho <- corrplot(rhos_taxres, nobs_taxres, c("family" = "Family",
+                                              "genus" = "Genus",
+                                              "stand.spec" = "Species"))
+ 
+ggsave("Figures/Taxonomic_resolution.png", p_rho, width = 7, height = 3)
 
 ## Pollen correction + uncertainty ----
 cor_bay_draw <- function(cwm, selectedzone, selectedtrait, 
@@ -507,7 +439,7 @@ cor_bay_draw <- function(cwm, selectedzone, selectedtrait,
       rho ~ dunif(-1, 1)
       mu[1] ~ dnorm(0, 0.0001)
       mu[2] ~ dnorm(0, 0.0001)
-      nu ~ dexp(1/30) # df of t distribution, Values of ν(nu) larger than about 30.0 make the t distribution roughly normal
+      nu ~ dexp(1/30) # df of t distribution Values of ν(nu) larger than about 30.0 make the t distribution roughly normal
   
       # Generate random draws from the estimated bivariate normal distribution
       for(i in 1:N){
@@ -559,7 +491,7 @@ rhos_draw <- rhos_LA %>%
   bind_rows(rhos_PH) %>% 
   mutate(country = word(zone, 1), zone = word(zone, 2)) 
  
-(p_rho <- ggplot(rhos_draw, aes(x = country, y = Mean)) + 
+(p_rho <- ggplot(rhos_draw, aes(x = zone, y = Mean)) + 
     # geoms
     geom_hline(yintercept = 0, linetype = "dashed") +
     # add points
@@ -569,8 +501,7 @@ rhos_draw <- rhos_LA %>%
     scale_y_continuous("", limits = c(-1,1)) +
     coord_flip() +
     # Faceting
-    facet_grid(zone~trait, labeller = labeller(trait = trait_lab,
-                                               zone = zone_lab)) +
+    facet_grid(~trait, labeller = labeller(trait = trait_lab)) +
     # Theme
     theme_bw() +
     theme(text = element_text(size = 12),
@@ -578,4 +509,4 @@ rhos_draw <- rhos_LA %>%
           legend.position = "bottom",
           legend.margin = margin(-25,0,0,0))
 ) 
-ggsave("Figures/Correction_draw.png", p_rho, width = 7, height = 7)
+ggsave("Figures/Correction_draw.png", p_rho, width = 7, height = 3)
