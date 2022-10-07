@@ -17,14 +17,12 @@
 ##
 ## ---------------------------
 
-options(scipen=999)
-
-## Load packages
-if(!require(tidyverse)) install.packages("tidyverse")
-if(!require(readxl)) install.packages("readxl")
-
-# Seed 
+options(scipen = 999)
 set.seed(1)
+## Load packages
+if (!require(tidyverse)) install.packages("tidyverse")
+if (!require(readxl)) install.packages("readxl")
+
 
 # Scotland ----
 pollen_raw <- read.csv("Data/Pollen_count_Scotland-checked.csv", skip = 1, sep = ";")
