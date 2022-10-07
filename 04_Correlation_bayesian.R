@@ -81,9 +81,9 @@ dfCWM_pol <- pollen_files %>%
          sitename = str_remove(sitename, "X")
          ) %>% 
   dplyr::select(country, sitename, pollen_mean = Mean, 
-                pollen_sd = SD, trait, correction, pollination, growthform) %>% 
+                pollen_sd = SD, trait, correction, pollination, growthform) 
   # convert to original scale
-  mutate(across(c("pollen_mean", "pollen_sd"), ~exp(.)))
+  # mutate(across(c("pollen_mean", "pollen_sd"), ~exp(.)))
 
 dfCWM_veg <- veg_files %>% 
   folderpath.fun(.) %>% 
@@ -107,7 +107,7 @@ dfCWM_veg <- veg_files %>%
          !(pollination == "wind" & zone == "zoneA" & sitename %in% c("665174", "C009","C015")),
          !(pollination == "not wind" & zone == "zoneA" & sitename %in% c("563166"))) %>% 
   # convert to original scale
-  mutate(across(c("veg_mean", "veg_sd"), ~exp(.))) %>% 
+  # mutate(across(c("veg_mean", "veg_sd"), ~exp(.))) %>% 
   # combine to facilitate mapping
   mutate(zone = paste(country, zone)) %>% 
   filter(!sitename == "563186")
@@ -159,8 +159,9 @@ cor_bay <- function(cwm, selectedzone, selectedtrait, selectedtreatment){
         x_rand[i,1:2] ~ dmt(mu[], prec[,,i], df)
         }
       #data# N, CWM_mean, CWM_sd
-      #monitor# rho
+      #monitor# rho, df
     }"
+  
   
   inits_list <-  list(mu = c(min(CWM_mean)*0.1, max(CWM_mean)*10),
                     rho = cor(CWM_mean[, 1], CWM_mean[, 2]))
@@ -197,7 +198,7 @@ combo <- cwm %>%
   distinct()
 
 if (Sys.info()[4] == "LUIN67311") {  
-  plan(multisession, workers = 1)
+  plan(multisession, workers = 2)
 } else {
   plan(multisession, workers = 6)
 }
@@ -336,9 +337,12 @@ cwm_trsh <- dfCWM_pol %>%
          correction == "no correction") %>% 
   left_join(dfCWM_veg, by = c("country", "sitename", "trait", "growthform", "pollination")) %>% 
   filter(taxres == "stand.spec")
+combo_trsh <- cwm_trsh %>% 
+  dplyr::select(trait, zone) %>% 
+  distinct()  # no zone A in the tree data
 rhos_trsh <- furrr::future_map2_dfr(combo$zone, combo$trait, 
                              ~cor_bay(cwm_trsh, selectedzone = .x, selectedtrait = .y,
-                                      selectedtreatment =  "trsh"))
+                                      selectedtreatment = "trsh"))
 # Herbs
 cwm_herb <- dfCWM_pol %>% 
   filter(growthform == "herb",
@@ -348,7 +352,7 @@ cwm_herb <- dfCWM_pol %>%
   filter(taxres == "stand.spec")
 
 rhos_pft <- furrr::future_map2_dfr(combo$zone, combo$trait, 
-                            ~cor_bay(rhos_pft, selectedzone = .x, selectedtrait = .y,
+                            ~cor_bay(cwm_herb, selectedzone = .x, selectedtrait = .y,
                                      selectedtreatment =  "herb")) %>% 
   bind_rows(rhos_trsh) %>% 
   mutate(country = word(zone,1), zone = word(zone,2)) %>% 
@@ -358,7 +362,7 @@ rhos_pft <- furrr::future_map2_dfr(combo$zone, combo$trait,
 nobs_pft <- cwm_herb %>% 
   bind_rows(cwm_trsh) %>% 
   mutate(country = word(zone,1), zone = word(zone,2)) %>% 
-  group_by(trait, country, zone, correction) %>% 
+  group_by(trait, country, zone, growthform) %>% 
   summarise(label = n(), .groups = "keep") %>% 
   left_join(rhos_pft, by = c("trait", "country", "zone", "growthform" = "treatment")) %>% 
   dplyr::select(label, country, zone, trait, Mean, treatment = "growthform") %>% 

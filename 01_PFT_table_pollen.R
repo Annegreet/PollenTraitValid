@@ -19,8 +19,8 @@
 
 
 ## Load packages
-if(!require(tidyverse)) install.packages("tidyverse")
-if(!require(readxl)) install.packages("readxl")
+if (!require(tidyverse)) install.packages("tidyverse")
+if (!require(readxl)) install.packages("readxl")
 
 ## Load data
 dfPOL_Scot <- readRDS("RDS_files/01_Pollen_data_Scot.rds")
