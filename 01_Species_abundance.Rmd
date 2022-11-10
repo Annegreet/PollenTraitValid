@@ -472,7 +472,10 @@ canop_c <- canop_c_raw %>%
 
 # join df's from both zones
 canop <- canop_b %>% 
-  left_join(canop_c, by = c("sitename","species"))
+  full_join(canop_c, by = c("sitename", "species")) %>% 
+  filter(!(is.na(spec_abun_b) & is.na(spec_abun_c))) %>% 
+  replace_na(list(spec_abun_b = 0,
+                  spec_abun_c = 0))
 ```
 
 ```{r calculate vegetation cover}
