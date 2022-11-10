@@ -94,7 +94,9 @@ la <- sla_ldmc_raw %>%
   arrange(sitename, species, measurementID) %>% 
   # merge with species harmonisation list
   left_join(harm, by = "species") %>% 
-  filter(!is.na(LA)) # check notes from raw data file for reason why missing
+  filter(!is.na(LA)) %>%  # check notes from raw data file for reason why missing
+  # convert to cm2
+  mutate(LA = LA/100)
 saveRDS(la, "RDS_files/01_LA.rds")
     
 ## C ----
