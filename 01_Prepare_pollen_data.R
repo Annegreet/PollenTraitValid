@@ -136,7 +136,8 @@ dfPOL <- read.csv("Data/Pollen_count_Switserland-checked.csv", skip = 1, sep = "
            str_remove(pollentaxon, "-type") %>% 
            # Typos
            recode(Caryophyllaccea = "Caryophyllaceae")
-  )
+  ) %>% 
+  mutate(sitename = recode(sitename, "X563186" = "X563166" )) # miss named site
 
 # percentage data with missing ppe's 
 missing_ppe_swiss <- dfPOL %>%
@@ -180,5 +181,3 @@ dfPOL <- dfPOL_nc %>%
   ungroup()
 
 saveRDS(dfPOL, "RDS_files/01_Pollen_data_Swiss.rds")
-
-rm(list=setdiff(ls(), c("missing_ppe_scot", "missing_ppe_swiss")))
