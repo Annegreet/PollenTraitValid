@@ -261,92 +261,54 @@ dfPFT <- full_join(pft, polmode, by = "AccSpeciesName") %>%
 saveRDS(dfPFT, "RDS_files/Polmode_pft_vegetation.rds")
 
 # Make summary table per site -----
+dfPFT <- readRDS("RDS_files/Polmode_pft_vegetation.rds")
 zoneA <- dfABUN_a %>%
-  arrange(sitename, stand.spec) %>% 
-  # join with pft and polmode data
-  left_join(dfPFT, 
-            by = c("stand.spec" = "AccSpeciesName")) %>% 
   rename(family = fam) %>% 
   ungroup %>% 
   mutate(zone = "zoneA",
          country = "Scotland")
 zoneB <- dfABUN_bc %>% 
-  # join with pft and polmode data
-  left_join(dfPFT, 
-            by = c("stand.spec" = "AccSpeciesName")) %>% 
   ungroup() %>% 
   dplyr::select(sitename, stand.spec, genus, family = fam,
-                abun = spec_abun_b, growthform, polmode) %>% 
+                abun = spec_abun_b) %>% 
   mutate(zone = "zoneB",
          country = "Scotland")
 zoneC <- dfABUN_bc %>% 
-  # join with pft and polmode data
-  left_join(dfPFT, 
-            by = c("stand.spec" = "AccSpeciesName")) %>% 
   ungroup %>% 
   dplyr::select(sitename, stand.spec, genus, family = fam, 
-                abun = spec_abun_c, growthform, polmode) %>% 
+                abun = spec_abun_c) %>% 
   mutate(zone = "zoneC",
          country = "Scotland")
 bdm_zoneA <- bdm_abun %>%
-  # join with pft and polmode data
-  left_join(dfPFT, 
-            by = c("stand.spec" = "AccSpeciesName")) %>% 
-  dplyr::select(sitename, stand.spec, genus, family, abun,
-                growthform, polmode) %>%
+  dplyr::select(sitename, stand.spec, genus, family, abun) %>%
   mutate(sitename = as.character(sitename)) %>%
   mutate(zone = "zoneA",
          country = "Switzerland")
-bdm_abunbc <- readRDS("RDS_files/01_Species_abundance_zoneBC_swiss.rds")
-bdm_zoneB <- bdm_abunbc %>%
-  # join with pft and polmode data
-  left_join(dfPFT, 
-            by = c("stand.spec" = "AccSpeciesName")) %>% 
-  ungroup() %>% 
-  dplyr::select(sitename, stand.spec, genus, family, abun = spec_abun_b,
-                growthform, polmode) %>%
-  mutate(sitename = as.character(sitename)) %>%
-  mutate(zone = "zoneB",
-         country = "Switzerland")
-bdm_zoneC <- bdm_abunbc %>%
-  # join with pft and polmode data
-  left_join(dfPFT, 
-            by = c("stand.spec" = "AccSpeciesName")) %>% 
-  ungroup() %>% 
-  dplyr::select(sitename, stand.spec, genus, family, abun = spec_abun_c,
-                growthform, polmode) %>%
-  mutate(sitename = as.character(sitename)) %>%
-  mutate(zone = "zoneC",
-         country = "Switzerland")
 
 dfABUN  <- bind_rows(zoneA, zoneB, zoneC,
-                     bdm_zoneA, bdm_zoneB,bdm_zoneC)
+                     bdm_zoneA)
 
 sum_polmode <- dfABUN %>% 
-  group_by(zone, sitename, stand.spec) %>% 
-  summarise(abun = sum(abun)) %>% 
-  mutate(abun = abun/sum(abun)) %>% 
-  left_join(dfPFT, c("stand.spec" = "AccSpeciesName")) %>% 
-  dplyr::select(zone, sitename, polmode,abun) %>% 
-  # drop_na() %>% 
+  left_join(dfPFT, by = c("stand.spec" = "AccSpeciesName")) %>% 
   group_by(zone, sitename, polmode) %>% 
-  summarise(percent = sum(abun, na.rm = TRUE)) %>% 
-  pivot_wider(names_from = polmode, values_from = percent)
+  # percentage of pollination type
+  summarise(abun = sum(abun, na.rm = T)) %>% 
+  mutate(abun = abun/sum(abun)) %>% 
+  pivot_wider(names_from = polmode, values_from = abun)
   
 sum <- dfABUN %>% 
-  group_by(zone,sitename, stand.spec) %>% 
-  summarise(abun = sum(abun)) %>% 
-  mutate(abun = abun/sum(abun)) %>% 
-  left_join(dfPFT, c("stand.spec" = "AccSpeciesName")) %>% 
-  # drop_na %>% 
+  left_join(dfPFT, by = c("stand.spec" = "AccSpeciesName")) %>% 
   mutate(growthform = case_when(growthform %in% c("tree", "shrub") ~ "Woody",
                                 growthform %in% c("herb", "grass", "fern") ~ "Non-Woody")
-         ) %>% 
+  ) %>% 
   group_by(zone, sitename, growthform) %>% 
-  summarise(percent = sum(abun, na.rm = TRUE)) %>% 
-  pivot_wider(names_from = growthform, values_from = percent) %>%  
-  left_join(sum_polmode, by = c("zone", "sitename")) %>% 
-  replace_na(list(Woody = 0)) %>% 
+  # percentage of growthform type
+  summarise(abun = sum(abun)) %>% 
+  mutate(abun = abun/sum(abun, na.rm = T)) %>% 
+  pivot_wider(names_from = growthform, values_from = abun) %>% 
+  # bind with pollination mode summary
+  left_join(sum_polmode, by = c("zone", "sitename"), suffix = c("_pft", "_polmode")) %>% 
   mutate(across(where(is.numeric), ~round(.,2)*100))
+
 saveRDS(sum, "RDS_files/01_Percentage_cover_pft.rds")
 
