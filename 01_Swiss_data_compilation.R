@@ -19,9 +19,9 @@
 ## ---------------------------
 
 # Load packages
-if(!require(tidyverse)) install.packages("tidyverse")
-if(!require(LCVP)) install.packages("LCVP")
-if(!require(lcvplants)) install.packages("lcvplants")
+if (!require(tidyverse)) install.packages("tidyverse")
+if (!require(LCVP)) install.packages("LCVP")
+if (!require(lcvplants)) install.packages("lcvplants")
 
 # Load data
 bdm_meta <- read_csv("Data/bdm_metadata.csv") # contains plot codes, X/Y coordinates (on the Swiss grid), elevation, some basic climate data (MAT, TAP) and a habitat classification
@@ -38,9 +38,10 @@ plot_id <- bdm_pollen %>%
 
 # check sites 
 bdm_meta <- bdm_meta %>% 
-  filter(aID_STAO %in% plot_id)
- 
-# bdm_meta <- bdm_meta %>% 
+  filter(aID_STAO %in% plot_id) 
+
+# saveRDS(bdm_meta, "RDS_files/01_Meta_data_BDM.rds")
+# bdm_meta <- bdm_meta %>%
 #   filter(aID_STAO %in% bdm_sp$plot)
 # write.csv(bdm_meta, file = "Data/Swiss_LC/all_BDM_plots_coord.csv")
 
@@ -63,10 +64,15 @@ bdm_sp_codes <- bdm_sp_codes %>%
                         `vaccinium vitis idaea` = "Vaccinium vitis-idaea",
                         `Anthoxanthum odoratum aggr.` = "Anthoxanthum odoratum"),
          Species_code = recode(Species_code, 
-                               alcxan = "alcvul", # Alchemilla vulgaris current code alcxan is not in species or trait data, alcvul is
-                               soldal = "solalp" # Soldanella alpinia idem
-                               ) # soraur,lonneg, rubfru, giumon missing from codes 
-         ) 
+                               soldal = "solalp", # Soldanella alpinia idem
+                               soraur = "sorauc", # Sorbus aucuparia
+                               lonneg = "lonnig", # Lonicera nigra
+                               giumon = "geumon" # Geum montanum
+                               ) 
+         ) %>% 
+  # missing codes
+  add_row(Species_code = c("Rubfru", "Alcxan"),
+          Species = c("Rubus fruticosus", "Alchemilla xanthochlora"))
 
 ## Abundance ----
 # Join species codes with abundance data
@@ -107,8 +113,7 @@ bdm_sp <- bdm_sp %>%
                                                    "dead wood", "dead trunk",
                                                    "stump", "fungi", "rock",
                                                    "root", "other", "bareground") ~ "No plants",
-                           str_detect(species_code, pattern = "[:digit:]") ~ "Unindentified",
-                           species_code %in% c("NA", "lonneg","rubfru","giumon","soraur") ~ "Unindentified" # missing species code
+                           str_detect(species_code, pattern = "[:digit:]") ~ "Unindentified"
                                 )
          ) %>% 
   # select relevant columns, rename
@@ -139,7 +144,7 @@ bdm_sp <- bdm_sp %>%
 
 saveRDS(bdm_sp, "RDS_files/01_Species_abundance_Swiss.rds")
 
-## ---- Traits
+## Traits ----
 bdm_traits <- bdm_traits %>% 
   left_join(bdm_sp_codes, by = c("species_code" = "Species_code"))
 bdm_traits <- bdm_traits %>% 
@@ -152,17 +157,14 @@ bdm_traits <- bdm_traits %>%
                                                     "dead wood", "dead trunk",
                                                     "stump", "fungi", "rock",
                                                     "root", "other", "bareground") ~ "No plants",
-                                str_detect(species_code, pattern = "[:digit:]") ~ "Unindentified",
-                                species_code %in% c("NA", "lonneg","rubfru","giumon","soraur") ~ "Unindentified" # missing species code
-  )
+                                str_detect(species_code, pattern = "[:digit:]") ~ "Unindentified") # missing species code
   ) %>% 
   # select relevant columns, rename to common name 
   dplyr::select(species_code, family = Family, genus = Genus, 
                 stand.spec, PFT = Functional_group,  
                 LA = area_mg, SLA = SLA_mm2_mg, PlantHeight = height_cm) %>% 
-  mutate(LA = LA * 100, #cm2 to mm2
-         PlantHeight = case_when(PFT == "TR" ~ PlantHeight*100, # when the functional group is tree, convert m to cm
-                                 TRUE ~ PlantHeight))
+  mutate(LA = LA * 100 #cm2 to mm2
+         )
 saveRDS(bdm_traits, "RDS_files/01_Traits_Swiss.rds")
 
 
