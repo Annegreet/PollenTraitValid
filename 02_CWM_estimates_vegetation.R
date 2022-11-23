@@ -137,208 +137,207 @@ if (Sys.info()[4] == "LUIN67311") {
 }
 
 # Scotland----
-if (1) { 
+if (0) { 
 # Zone A ----
 # all
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneA",
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = allpol,
-                            selectedpft = allpft),
-                  .options = furrr_options(seed = TRUE))
-# only taxa in pollen data
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneA",
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = allpol,
-                            selectedpft = allpft,
-                            notinpollen = TRUE),
-                  .options = furrr_options(seed = TRUE))
-# pollination
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneA",
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = nowind,
-                            selectedpft = allpft),
-                  .options = furrr_options(seed = TRUE))
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneA",
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = wind,
-                            selectedpft = allpft),
-                  .options = furrr_options(seed = TRUE))
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneA",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = allpol,
+                             selectedpft = allpft),
+                   .options = furrr_options(seed = TRUE))
+ # only taxa in pollen data
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneA",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = allpol,
+                             selectedpft = allpft,
+                             notinpollen = TRUE),
+                   .options = furrr_options(seed = TRUE))
+ # pollination
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneA",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = nowind,
+                             selectedpft = allpft),
+                   .options = furrr_options(seed = TRUE))
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneA",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = wind,
+                             selectedpft = allpft),
+                   .options = furrr_options(seed = TRUE))
 
-# growth form
-# barely trees in zone A -> only do herbs
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneA",
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = allpol,
-                            selectedpft = herb
-                            ),
-                  .options = furrr_options(seed = TRUE))
-# Taxonomic resolution
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneA",
-                            selectedtrait = .,
-                            selectedtaxres = "genus",
-                            selectedpolmode = allpol,
-                            selectedpft = allpft),
-                  .options = furrr_options(seed = TRUE))
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneA",
-                            selectedtrait = .,
-                            selectedtaxres = "family",
-                            selectedpolmode = allpol,
-                            selectedpft = allpft),
-                  .options = furrr_options(seed = TRUE))
+ # growth form
+ # barely trees in zone A -> only do herbs
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneA",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = allpol,
+                             selectedpft = herb
+                             ),
+                   .options = furrr_options(seed = TRUE))
+ # Taxonomic resolution
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneA",
+                             selectedtrait = .,
+                             selectedtaxres = "genus",
+                             selectedpolmode = allpol,
+                             selectedpft = allpft),
+                   .options = furrr_options(seed = TRUE))
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneA",
+                             selectedtrait = .,
+                             selectedtaxres = "family",
+                             selectedpolmode = allpol,
+                             selectedpft = allpft),
+                   .options = furrr_options(seed = TRUE))
 
-## Zone B ----
-# all
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneB",
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = allpol,
-                            selectedpft = allpft,
-                            taxtrait = TRUE # save taxon level trait estimates
-                  ),
-                  .options = furrr_options(seed = TRUE))
-# only taxa in pollen data
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneB",
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = allpol,
-                            selectedpft = allpft,
-                            notinpollen = TRUE),
-                  .options = furrr_options(seed = TRUE))
-# pollination
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneB",
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = nowind,
-                            selectedpft = allpft),
-                  .options = furrr_options(seed = TRUE))
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneB",
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = wind,
-                            selectedpft = allpft),
-                  .options = furrr_options(seed = TRUE))
-# growth form
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneB",
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = allpol,
-                            selectedpft = trsh),
-                  .options = furrr_options(seed = TRUE))
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneB",
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = allpol,
-                            selectedpft = herb),
-                  .options = furrr_options(seed = TRUE))
-# Taxonomic resolution
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneB",
-                            selectedtrait = .,
-                            selectedtaxres = "genus",
-                            selectedpolmode = allpol,
-                            selectedpft = allpft),
-                  .options = furrr_options(seed = TRUE))
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneB",
-                            selectedtrait = .,
-                            selectedtaxres = "family",
-                            selectedpolmode = allpol,
-                            selectedpft = allpft),
-                  .options = furrr_options(seed = TRUE))
-
-## Zone C ----
-# all 
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneC",
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = allpol,
-                            selectedpft = allpft),
-                  .options = furrr_options(seed = TRUE))
-# only taxa in pollen data
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneC",
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = allpol,
-                            selectedpft = allpft,
-                            notinpollen = TRUE),
-                  .options = furrr_options(seed = TRUE))
-# pollination
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneC", 
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = nowind,
-                            selectedpft = allpft),
-                  .options = furrr_options(seed = TRUE))
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneC", 
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = wind,
-                            selectedpft = allpft),
-                  .options = furrr_options(seed = TRUE))
-# growth form
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneC", 
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = allpol,
-                            selectedpft = trsh),
-                  .options = furrr_options(seed = TRUE))
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneC", 
-                            selectedtrait = .,
-                            selectedtaxres = "stand.spec",
-                            selectedpolmode = allpol,
-                            selectedpft = herb
-                  ),
-                  .options = furrr_options(seed = TRUE))
-# Taxonomic resolution
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneC", 
-                            selectedtrait = .,
-                            selectedtaxres = "genus",
-                            selectedpolmode = allpol,
-                            selectedpft = allpft),
-                  .options = furrr_options(seed = TRUE))
-furrr::future_map(scottraits,
-                  ~cwm_veg_scot(selectedabun = "zoneC", 
-                            selectedtrait = .,
-                            selectedtaxres = "family",
-                            selectedpolmode = allpol,
-                            selectedpft = allpft),
-                  .options = furrr_options(seed = TRUE))
+ ## Zone B ----
+ # all
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneB",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = allpol,
+                             selectedpft = allpft,
+                             taxtrait = TRUE # save taxon level trait estimates
+                   ),
+                   .options = furrr_options(seed = TRUE))
+ # only taxa in pollen data
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneB",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = allpol,
+                             selectedpft = allpft,
+                             notinpollen = TRUE),
+                   .options = furrr_options(seed = TRUE))
+ # pollination
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneB",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = nowind,
+                             selectedpft = allpft),
+                   .options = furrr_options(seed = TRUE))
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneB",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = wind,
+                             selectedpft = allpft),
+                   .options = furrr_options(seed = TRUE))
+ # growth form
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneB",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = allpol,
+                             selectedpft = trsh),
+                   .options = furrr_options(seed = TRUE))
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneB",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = allpol,
+                             selectedpft = herb),
+                   .options = furrr_options(seed = TRUE))
+ # Taxonomic resolution
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneB",
+                             selectedtrait = .,
+                             selectedtaxres = "genus",
+                             selectedpolmode = allpol,
+                             selectedpft = allpft),
+                   .options = furrr_options(seed = TRUE))
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneB",
+                             selectedtrait = .,
+                             selectedtaxres = "family",
+                             selectedpolmode = allpol,
+                             selectedpft = allpft),
+                   .options = furrr_options(seed = TRUE))
+# Zone C ----
+ all
+ furrr::future_map(scottraits[-3],
+                   ~cwm_veg_scot(selectedabun = "zoneC",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = allpol,
+                             selectedpft = allpft),
+                   .options = furrr_options(seed = TRUE))
+ # only taxa in pollen data
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneC",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = allpol,
+                             selectedpft = allpft,
+                             notinpollen = TRUE),
+                   .options = furrr_options(seed = TRUE))
+ pollination
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneC",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = nowind,
+                             selectedpft = allpft),
+                   .options = furrr_options(seed = TRUE))
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneC",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = wind,
+                             selectedpft = allpft),
+                   .options = furrr_options(seed = TRUE))
+ # growth form
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneC",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = allpol,
+                             selectedpft = trsh),
+                   .options = furrr_options(seed = TRUE))
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneC",
+                             selectedtrait = .,
+                             selectedtaxres = "stand.spec",
+                             selectedpolmode = allpol,
+                             selectedpft = herb
+                   ),
+                   .options = furrr_options(seed = TRUE))
+ # Taxonomic resolution
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneC",
+                             selectedtrait = .,
+                             selectedtaxres = "genus",
+                             selectedpolmode = allpol,
+                             selectedpft = allpft),
+                   .options = furrr_options(seed = TRUE))
+ furrr::future_map(scottraits,
+                   ~cwm_veg_scot(selectedabun = "zoneC",
+                             selectedtrait = .,
+                             selectedtaxres = "family",
+                             selectedpolmode = allpol,
+                             selectedpft = allpft),
+                   .options = furrr_options(seed = TRUE))
 }
 
 
 # Switzerland ----
 if (1) { 
   # Load data
-  bdm_traits <- readRDS("RDS_files/01_Traits_Swiss.rds")
+  bdm_traits <- readRDS("RDS_files/01_Traits_Swiss.rds") %>% 
+    # trees over 200 cm not sampled for traits, use TRY data instead
+    filter(!PFT == "TR")
   bdm_abun <- readRDS("RDS_files/01_Species_abundance_Swiss.rds") 
-  bdm_pollen <- readRDS("RDS_files/01_Pollen_data_Swiss.rds")
-  pollen_ids <- bdm_pollen$sitename %>% unique %>% str_remove("X")
-  
+
   dfPFT <- readRDS("RDS_files/Polmode_pft_vegetation.rds")
   
   zoneA <- bdm_abun %>%
@@ -346,8 +345,7 @@ if (1) {
     # join with pft and polmode data
     left_join(dfPFT, 
               by = c("stand.spec" = "AccSpeciesName")) %>% 
-    ungroup %>% 
-    filter(sitename %in% pollen_ids)
+    ungroup 
  
   lABUN <- list("zoneA" = zoneA)
 
