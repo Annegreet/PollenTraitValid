@@ -15,7 +15,8 @@
 ## Notes:
 ##   
 ## References:
-##
+## - Ch 17 Doing Bayesian analysis, Kruschke
+## - cow_raising.R, Matt Denwood, PR statistics Bayesian course
 ## ---------------------------
 
 set.seed(1)
@@ -24,6 +25,7 @@ set.seed(1)
 if (!require(tidyverse)) install.packages("tidyverse")
 if (!require(rjags)) install.packages("rjags")
 if (!require(runjags)) install.packages("runjags")
+if (!require(rlang)) install.packages("rlang")
 
 ## Load data
 bdm_meta <- read_csv("Data/bdm_metadata.csv") %>% 
@@ -32,27 +34,24 @@ bdm_meta <- read_csv("Data/bdm_metadata.csv") %>%
 traits <- c("LA","SLA","PlantHeight")
 
 pollen_files <- list.files("RDS_files/") %>% 
-  str_subset(pattern = "03_CWM_estimates_") %>% 
+  str_subset(pattern = "03_CWM_estimates_|03_zCWM_estimates_") %>% 
   str_subset(paste(traits, collapse = "|")) %>% 
-  str_subset(pattern = "pollen") %>% 
-  str_subset(pattern = "gapfilled", negate = TRUE) %>% 
-  str_subset(pattern = "Switzerland") %>% 
-  str_subset(pattern = "draw", negate = TRUE)
+  str_subset(pattern = "pollen") %>%  
+  str_subset(pattern = "Switzerland") 
 
 pollen_lab <- pollen_files %>% 
   str_subset(paste(traits, collapse = "|")) %>% 
-  str_remove(., "03_CWM_estimates_") %>% 
   str_remove(., ".rds")
 
 veg_files <- list.files("RDS_files/") %>% 
-  str_subset(pattern = "03_CWM_estimates_") %>% 
+  str_subset(pattern = "03_CWM_estimates_|03_zCWM_estimates_") %>% 
   str_subset(paste(traits, collapse = "|")) %>% 
-  str_subset(pattern = "Switzerland") 
+  str_subset(pattern = "Switzerland") %>% 
+  str_subset(pattern = "zoneA")
 
 veg_lab <- veg_files %>% 
   str_subset(paste(traits, collapse = "|")) %>% 
-  str_remove(., "03_CWM_estimates_") %>% 
-  str_remove(., ".rds")
+  str_remove(., ".rds") 
 
 folderpath.fun <- function(x)
 {paste("RDS_files/", x, sep = "/")}
@@ -60,9 +59,6 @@ folderpath.fun <- function(x)
 dfCWM_pol <- pollen_files %>% 
   folderpath.fun(.) %>% 
   purrr::map2(pollen_lab, ~readRDS(.) %>% 
-                as.data.frame() %>% 
-                rownames_to_column("parameter") %>% 
-                filter(., str_detect(parameter, "cwm\\[")) %>%
                 mutate(label = .y)) %>% 
   bind_rows() %>% 
   as_tibble() %>% 
@@ -72,15 +68,17 @@ dfCWM_pol <- pollen_files %>%
                                 TRUE ~ "no correction"),
          pollination = replace_na(pollination, "allpol"),
          growthform = replace_na(growthform, "allpft"),
-         sitename = str_remove(sitename, "X")
+         sitename = str_remove(sitename, "X"),
+         standardized = ifelse(str_detect(label, "zCWM"),"yes","no")
   ) %>% 
   dplyr::select(country, sitename, cwm_mean = Mean, 
-                cwm_sd = SD, trait, correction, pollination, growthform) %>% 
+                cwm_sd = SD, trait, correction, pollination, growthform, standardized) %>% 
   # create treatment column
   mutate(treatment = case_when((pollination == "allpol" & growthform == "allpft") ~ "Correction factor",
                                (pollination != "allpol" & growthform == "allpft") ~ "Pollination mode",
                                (growthform != "allpft" & pollination == "allpol") ~ "Growth form")) %>% 
-  left_join(bdm_meta, by = "sitename")
+  left_join(bdm_meta, by = "sitename") %>% 
+  filter(!sitename == "unknown")
 
 dfCWM_veg <- veg_files %>% 
   folderpath.fun(.) %>% 
@@ -91,9 +89,10 @@ dfCWM_veg <- veg_files %>%
   bind_rows() %>% 
   as_tibble() %>% 
   mutate(country = str_extract(label, pattern = "Scotland|Switzerland"),
-         pollination = dplyr::recode(pollination, `no wind` = "not wind")) %>% 
+         pollination = dplyr::recode(pollination, `no wind` = "not wind"),
+         standardized = ifelse(str_detect(label, "zCWM"), "yes", "no")) %>% 
   dplyr::select(country, sitename, trait, cwm_mean = Mean, cwm_sd = SD,
-                growthform, pollination, taxres, zone) %>% 
+                growthform, pollination, taxres, zone, standardized) %>% 
   # create treatment column
   mutate(treatment = case_when((pollination == "allpol" & growthform == "allpft" &
                                   taxres == "stand.spec") ~ "Correction factor",
@@ -103,86 +102,137 @@ dfCWM_veg <- veg_files %>%
          zone = str_remove(zone, pattern = "Scotland |Switzerland ")) %>% 
   left_join(bdm_meta, by = "sitename")
 
-selectedtrait <- "PlantHeight"
+saveRDS(dfCWM_pol, "RDS_files/04_zCWM_estimates_pollen_Switzerland.rds")
+saveRDS(dfCWM_veg, "RDS_files/04_zCWM_estimates_vegetation_Switzerland.rds")
 
-saveRDS(dfCWM_pol, "RDS_files/04_CWM_estimates_pollen_Switzerland.rds") 
-saveRDS(dfCWM_veg, "RDS_files/04_CWM_estimates_vegetation_Switzerland.rds") 
+selectedtrait <- "PlantHeight"
 
 # Linear model ----
 lm_bay <- function(cwm, selectedtrait, selecteddata){
-  CWM <- cwm %>% 
-    filter(trait == selectedtrait)
-  Mean <- CWM %>% 
+  Mean <- cwm %>% 
+    filter(trait == selectedtrait) %>% 
+    filter(standardized == "no") %>% 
+    pull(cwm_mean)
+  zMean <- cwm %>% 
+    filter(trait == selectedtrait) %>% 
+    filter(standardized == "yes") %>% 
     pull(cwm_mean) 
-  SD <- CWM %>%
+  zSD <- cwm %>% 
+    filter(trait == selectedtrait) %>% 
+    filter(standardized == "yes") %>% 
     pull(cwm_sd) 
-  Elev <- CWM %>% 
+  Elev <- cwm %>% 
+    filter(trait == selectedtrait) %>% 
+    filter(standardized == "yes") %>% 
     pull(elevation)
-  MeanElev <- mean(Elev)
-  zElev <- Elev - MeanElev # mean center elevation 
-  N <- length(Mean)
+  zElev <- (Elev - mean(Elev)) / sd(Elev) # standardize elevation
+  N <- length(zMean)
+  Habitat <- cwm %>% 
+    filter(trait == selectedtrait) %>% 
+    filter(standardized == "no") %>% 
+    pull(habitat01) %>% 
+    as.factor()
+  # values to predict on
+  Elev_pred <- seq(400, 2600, length.out = 250)
+  zElev_pred <- rep((Elev_pred - mean(Elev_pred))/sd(Elev_pred), 2)
+  Habitat_pred <- c(rep("grasslands", 250), rep("forests", 250)) %>% as.factor()
+  Npred <- 500
   
   model_string <- "
       model {
       for(i in 1:N) {
-        Mean[i] ~ dt(regression_fitted[i], 1/SD[i]^2,df)
-        # Mean[i] ~ dnorm(regression_fitted[i], 1/SD[i]^2)
-        regression_fitted[i] <- intercept + slope_elevation * Elev[i]
-        regression_residual[i] <- Mean[i] - regression_fitted[i]
-      }
+      # regression on standardized data
+        zMean[i] ~ dt(regression_fitted[i], 1/zsd^2, df)
+        regression_fitted[i] <- zintercept +  zslope_elevation * zElev[i] + zhabitat_effect[Habitat[i]]
+        regression_residual[i] <- zMean[i] - regression_fitted[i]
+        zSD[i] ~ dnorm(zsd, tau_sd)
+        }
     
-      # Priors
-      intercept ~ dnorm(0, 10^-4)
-      slope_elevation ~ dnorm(0, 10^-4)
+      # priors
+      zsd ~ dlnorm(0, 10^-4)
+      tau_sd ~ dgamma(0.001, 0.001)
+      zintercept ~ dnorm(0, 10^-4)
+      zslope_elevation ~ dnorm(0,10^-4)
       df ~ dexp(1/30) # df of t distribution, Values of d) larger than about 30.0 make the t distribution roughly normal
-      
-      #data# N, Mean, SD, Elev
-      #monitor# intercept, slope_elevation
+      zhabitat_effect[1] <- 0
+      zhabitat_effect[2] ~ dnorm(0, 10^-4)
+  
+      # predict
+        for(i in 1:Npred){
+        zmean_pred[i] ~ dt(zintercept +  zslope_elevation * zElev_pred[i] + zhabitat_effect[Habitat_pred[i]], 1/zsd^2, df)
+        mean_pred[i] <- zmean_pred[i] * sd(Mean) + mean(Mean) # transform to original scale
+        }
+      #data# N, zMean, zSD, zElev, Mean, Habitat, zElev_pred, Habitat_pred, Npred
+      #monitor# zintercept, zslope_elevation, zhabitat_effect[2], mean_pred, zsd
       #residual# regression_residual
       #fitted# regression_fitted
-      #inits# intercept, slope_elevation
+      #inits# zintercept, zslope_elevation, zhabitat_effect
     }"
   
-  intercept <- list(chain1 = min(Mean), chain2 = max(Mean))
-  slope_elevation <- list(chain1 = c(-10), chain2 = c(10))
+  zintercept <- list(chain1 = min(zMean), chain2 = mean(zMean), chain3 = max(zMean))
+  zslope_elevation <- list(chain1 = c(-10), chain2 = c(10), chain3 = 0)
+  zhabitat_effect <- list(chain1 = c(NA, min(zMean)), chain2 = c(NA, mean(zMean)), chain3 = c(NA, max(zMean)))
+  (results <- run.jags(model_string, n.chains = 3, 
+                      modules = "glm on", sample = 10000))
   
-  results <- run.jags(model_string, n.chains = 2, 
-                      modules = "glm on")
-  plot(results)
+  results_summary <- as.data.frame(summary(results)) %>% 
+    mutate(trait = selectedtrait,
+           data = selecteddata)
+  if (!all(results_summary[,"SSeff"] >= 10000)) 
+    warn("Effective sample size too low", x = results_summary)
+ 
+  # save convergence diagnostics
+  plot(results, vars = c("zintercept", "zslope_elevation", "zhabitat_effect[2]", "zsd"), 
+       file = paste0("Convergence_diagnostics/04_Covergence_correlation_regression_", selectedtrait,
+                              "_", selecteddata, ".pdf" ))
+  # gelman plots
+  pdf(paste0("Convergence_diagnostics/04_Gelman_correlation_regression_", selectedtrait,
+             "_", selecteddata, ".pdf"))
+  gelman.plot(results, vars = c("zintercept", "zslope_elevation", "zhabitat_effect[2]", "zsd"),  ask = FALSE)
+  dev.off()
   
-  results_summary <- as.data.frame(summary(results)) 
-  list(model = results,
-         summary = results_summary)
+  # Create points to predict on
+  lm_mcmc <- as.mcmc(results)
+  pred_cwm_mean <- apply(lm_mcmc[, grep("mean_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, mean)
+  # Calculate confidence interval
+  credible_lower <- apply(lm_mcmc[, grep("mean_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, quantile, prob = 0.05)
+  credible_upper <- apply(lm_mcmc[, grep("mean_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, quantile, prob = 0.95)
+  df_pred <- tibble(elevation = rep(Elev_pred, 2),
+                    habitat = Habitat_pred,
+                    cwm_mean = pred_cwm_mean,
+                    lower = credible_lower,
+                    upper = credible_upper)
   
   # plot model results
-  elev_new <- seq(500, 2500, length.out = 100) # elevations for model predictions
-  lm_mcmc <- as.mcmc(results)
-  pred_cwm_mean <- mean(lm_mcmc[,"intercept"]) + elev_new * mean(lm_mcmc[,"slope_elevation"])
-  pred_mean_dist <- matrix(NA, nrow = nrow(lm_mcmc), ncol = length(elev_new))
-  for (i in 1:nrow(pred_mean_dist)) {
-    pred_mean_dist[i,] <- lm_mcmc[i,"intercept"] + elev_new * lm_mcmc[i,"slope_elevation"]
-  }
-  credible_lower <- apply(pred_mean_dist, MARGIN = 2, quantile, prob = 0.05)
-  credible_upper <- apply(pred_mean_dist, MARGIN = 2, quantile, prob = 0.95)
-  df_pred <- tibble(elevation = elev_new,
-               cwm_mean = pred_cwm_mean,
-               lower = credible_lower,
-               upper = credible_upper)
-  p <- ggplot(df_pred, aes(x = elevation, y = cwm_mean)) +
+  (p <- ggplot(df_pred, aes(x = elevation, y = cwm_mean, colour = habitat)) +
     geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, color = "grey") +
     geom_line(color = "darkgreen") +
-    geom_point(data = CWM, aes(x = elevation, y = cwm_mean)) +
+    # add data original data points
+    geom_point(data = cwm[cwm$trait == selectedtrait & cwm$standardized == "no",], aes(x = elevation, y = cwm_mean)) +
     scale_y_continuous("") + 
     scale_x_continuous("Elevation (m)") +
     ggtitle( paste(labs_trait[selectedtrait], selecteddata)) +
-    theme_bw()
+    theme_bw())
   ggsave(paste0("Figures/CWM_elevation_", selectedtrait,"_", selecteddata, ".png"),p)
+  
+  # check model assumptions
+  # Extract residuals and fitted estimates:
+  residuals <- resid(results)
+  fitted <- fitted(results)
+  
+  png(paste0("Figures/CWM_elevation_model_check_", selectedtrait,"_", selecteddata, ".png"))
+  par(mfrow = c(2,1))
+  # Plot of residuals indicates a potential problem:
+  qqnorm(residuals); qqline(residuals)
+  
+  # Looking at residuals vs fitted indicates increasing variance:
+  plot(fitted, residuals); abline(h = 0)
+  dev.off()
 }
-
 
 labs_trait <- c("Height (log)(cm)",
                 "Leaf area (log)(mm2)",
-                "SLA (mm2/mg)")
+                "SLA (log) (mm2/mg)")
 names(labs_trait) <- c("PlantHeight", "LA", "SLA")
 
 cwm_veg <- dfCWM_veg %>% 
@@ -192,58 +242,72 @@ lm_veg <- purrr::map(names(labs_trait), ~lm_bay(cwm = cwm_veg, selectedtrait = .
 cwm_pol <- dfCWM_pol %>% 
   filter(treatment == "Correction factor") %>% 
   drop_na(elevation) %>% 
-  filter(correction == "no correction")
+  filter(correction == "correction")
 lm_pol <- purrr::map(names(labs_trait), ~lm_bay(cwm = cwm_pol, selectedtrait = .x, selecteddata = "Pollen"))
 
 
-# Check residuals ----
-
-# Extract residuals and fitted estimates:
-residuals <- resid(lm_veg[[1]]$model)
-fitted <- fitted(results)
-
-# Plot of residuals indicates a potential problem:
-qqnorm(residuals); qqline(residuals)
-
-# Looking at residuals vs fitted indicates increasing variance:
-plot(fitted, residuals); abline(h = 0)
-
-cwm_veg %>%
-  filter(trait == "PlantHeight") %>% 
-  add_epred_draws(lm_veg[[1]]) %>%
-  ggplot(aes(x = elevation, y = cwm_mean)) +
-  stat_lineribbon(aes(y = .epred)) +
-  geom_point(data = cwm_veg) +
-  scale_fill_brewer(palette = "Greys") +
-  scale_color_brewer(palette = "Set2")
-plot(lm_veg[[1]]$model)
-
+# Quick plots  ----
+## Vegetation
+### Elevation
 dfCWM_veg %>% 
   filter(treatment == "Correction factor")  %>% 
-ggplot(.,aes(x = elevation, y = cwm_mean)) +
+  filter(standardized == "no") %>% 
+ggplot(.,aes(x = elevation, y = cwm_mean, colour = habitat01)) +
   geom_point()  +
   geom_smooth(method = "lm") +
   facet_wrap(.~trait, scales = "free") +
   theme_bw()
-dfCWM_pol %>% 
-  filter(treatment == "Correction factor") %>% 
-  ggplot(.,aes(x = elevation, y = cwm_mean, color = correction)) +
+### MAT
+dfCWM_veg %>% 
+  filter(treatment == "Correction factor")  %>% 
+  filter(standardized == "no") %>% 
+ggplot(., aes(x = MAT, y = cwm_mean, colour = habitat01)) +
+  geom_point()  +
+  geom_smooth(method = "lm") +
+  facet_wrap(.~trait, scales = "free") +
+  theme_bw()
+### TAP
+dfCWM_veg %>% 
+  filter(treatment == "Correction factor")  %>% 
+  filter(standardized == "no") %>% 
+  ggplot(., aes(x = TAP, y = cwm_mean, colour = habitat01)) +
   geom_point()  +
   geom_smooth(method = "lm") +
   facet_wrap(.~trait, scales = "free") +
   theme_bw()
 
-dfCWM %>% 
-  filter(treatment == "Growth form") %>% 
-  ggplot(.,aes(x = elevation, y = veg_mean, color = growthform)) +
+## Pollen
+### Elevation
+dfCWM_pol %>% 
+  filter(treatment == "Correction factor") %>% 
+  filter(correction == "correction") %>% 
+  filter(standardized == "no") %>% 
+ggplot(.,aes(x = elevation, y = cwm_mean, color = habitat01)) +
   geom_point()  +
   geom_smooth(method = "lm") +
   facet_wrap(.~trait, scales = "free") +
   theme_bw()
-dfCWM %>% 
-  filter(treatment == "Growth form") %>% 
-  ggplot(.,aes(x = elevation, y = pollen_mean, color = growthform)) +
+
+### MAT
+dfCWM_pol %>% 
+  filter(treatment == "Correction factor") %>% 
+  filter(correction == "correction") %>% 
+  filter(standardized == "no") %>% 
+ggplot(.,aes(x = MAT, y = cwm_mean, color = habitat01)) +
   geom_point()  +
   geom_smooth(method = "lm") +
   facet_wrap(.~trait, scales = "free") +
   theme_bw()
+
+### TAP
+dfCWM_pol %>% 
+  filter(treatment == "Correction factor") %>% 
+  filter(correction == "correction") %>% 
+  filter(standardized == "no") %>% 
+ggplot(.,aes(x = TAP, y = cwm_mean, color = habitat01)) +
+  geom_point()  +
+  geom_smooth(method = "lm") +
+  facet_wrap(.~trait, scales = "free") +
+  theme_bw()
+
+
