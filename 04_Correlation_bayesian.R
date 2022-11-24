@@ -1,4 +1,26 @@
+## ---------------------------
+##
+## Script name: 04_Correlation_bayesian
+##
+## Purpose of script: Calculate correlation between vegetation and pollen CWM for different subsets
+##
+## Author: Annegreet Veeken
+##
+## Date Created: 2022-07-24
+##
+## Email: veeken.g.a@gmail.com
+##
+## ---------------------------
+##
+## Notes:
+##   
+## References:
+## http://doingbayesiandataanalysis.blogspot.com/2015/12/prior-on-df-normality-parameter-in-t.html
+## https://solomonkurz.netlify.app/post/2019-02-16-bayesian-correlations-let-s-talk-options/
+## ---------------------------
+
 set.seed(1)
+options(scipen = 9999)
 
 ## Load packages
 if (!require(tidyverse)) install.packages("tidyverse")
