@@ -108,138 +108,87 @@ saveRDS(dfCWM_veg, "RDS_files/04_zCWM_estimates_vegetation_Switzerland.rds")
 selectedtrait <- "PlantHeight"
 
 # Linear model ----
-lm_bay <- function(cwm, selectedtrait, selecteddata){
+lm_bay <- function(cwm, selectedhabitat,  selectedtrait, selecteddata){
   CWM <- cwm %>% 
+    filter(habitat01 == selectedhabitat) %>% 
     filter(trait == selectedtrait) %>% 
     filter(standardized == "no") %>% 
     pull(cwm_mean)
   zCWM <- cwm %>% 
+    filter(habitat01 == selectedhabitat) %>% 
     filter(trait == selectedtrait) %>% 
     filter(standardized == "yes") %>% 
     pull(cwm_mean) 
   zSD <- cwm %>% 
+    filter(habitat01 == selectedhabitat) %>% 
     filter(trait == selectedtrait) %>% 
     filter(standardized == "yes") %>% 
     pull(cwm_sd) 
   Elev <- cwm %>% 
+    filter(habitat01 == selectedhabitat) %>% 
     filter(trait == selectedtrait) %>% 
     filter(standardized == "yes") %>% 
     pull(elevation)
   zElev <- (Elev - mean(Elev)) / sd(Elev) # standardize elevation
   N <- length(zCWM)
-  Habitat <- cwm %>% 
-    filter(trait == selectedtrait) %>% 
-    filter(standardized == "no") %>% 
-    pull(habitat01) %>% 
-    as.factor()
-  Nhab <- nlevels(Habitat)
-  
+
   # values to predict on
   maxmin <- cwm %>%
-    ungroup() %>% 
-    group_by(habitat01) %>% 
+    filter(habitat01 == selectedhabitat) %>% 
     summarise(min = min(elevation), max = max(elevation))
-  Elev_pred_forest <- seq(from = as.numeric(maxmin[1,"min"]), to = as.numeric(maxmin[1,"max"]), by = 5)
-  Elev_pred_grass <- seq(from = as.numeric(maxmin[2,"min"]), to = as.numeric(maxmin[2,"max"]), by = 5)
-  zElev_pred_forest <- (Elev_pred_forest - mean(Elev_pred_forest))/sd(Elev_pred_forest)
-  zElev_pred <- c((Elev_pred_grass - mean(Elev_pred_grass))/sd(Elev_pred_grass), zElev_pred_forest)
-  Habitat_pred <- c(rep("grasslands", length(Elev_pred_grass)), rep("forests", length(Elev_pred_forest))) %>% as.factor()
-  Npred <- length(Habitat_pred)
+  Elev_pred <- seq(from = as.numeric(maxmin[1,"min"]), to = as.numeric(maxmin[1,"max"]), by = 2)
+  zElev_pred <- (Elev_pred - mean(Elev_pred)) / sd(Elev_pred)
+  Npred <- length(zElev_pred)
   
-  model_string <- "
-      model {
+  # define model
+  model_string <- "model {
       for(i in 1:N) {
       # regression on standardized data
         zCWM[i] ~ dt(regression_fitted[i], 1/zsd^2, df)
-        regression_fitted[i] <- zintercept +  zslope_elevation * zElev[i] + 
-                                zhabitat_int[Habitat[i]] + zhabitat_slope[Habitat[i]]*zElev[i]
+        regression_fitted[i] <- zintercept +  zslope_elevation * zElev[i] 
         regression_residual[i] <- zCWM[i] - regression_fitted[i]
         zSD[i] ~ dnorm(zsd, tau_sd)
         }
     
       # priors
-      zsd ~ dlnorm(0,1)
-      tau_sd ~ dgamma(0.01, 0.01)
-      zintercept ~ dnorm(0, 1)
-      zslope_elevation ~ dnorm(0,1)
+      zsd ~ dlnorm(0, 1/(1)^2)
+      tau_sd ~ dgamma(0.001, 0.001)
+      zintercept ~ dnorm(0, 1/(10)^2)
+      zslope_elevation ~ dnorm(0, 1/(10)^2)
       df ~ dexp(1/30) # df of t distribution, Values of d) larger than about 30.0 make the t distribution roughly normal
-      zhabitat_int[1] <- 0
-      zhabitat_int[2] ~ dnorm(0, 10^-4)
-      for(i in 1:Nhab){
-        zhabitat_slope[i] ~ dnorm(0, tau_habitat)
-      }
-      tau_habitat ~ dgamma(0.01, 0.01)
-  
+      
       # predict
-        for(i in 1:Npred){
-        zCWM_pred[i] ~ dt(mu_pred[i], 1/zsd^2, df)
-        mu_pred[i] <- zintercept +  zslope_elevation * zElev_pred[i] +
-                               zhabitat_int[Habitat_pred[i]] + zhabitat_slope[Habitat_pred[i]]*zElev_pred[i]
+      for(i in 1:Npred){
+        zCWM_pred[i] ~ dt(zintercept +  zslope_elevation * zElev_pred[i], 1/zsd^2, df)
         CWM_pred[i] <- zCWM_pred[i] * sd(CWM) + mean(CWM) # transform to original scale
-        }
-      #data# N, zCWM, zSD, zElev, CWM, Habitat, zElev_pred, Habitat_pred, Npred, Nhab
-      #monitor# zintercept, zslope_elevation, zhabitat_int[2], zhabitat_slope, CWM_pred, zsd
+      }
+      #data# N, zCWM, zSD, zElev, Npred, zElev_pred, CWM
+      #monitor# zintercept, zslope_elevation, zsd, df, CWM_pred
       #residual# regression_residual
       #fitted# regression_fitted
-      #inits# zintercept, zslope_elevation, zhabitat_int, zhabitat_slope
-    }"
-  
+      #inits# zintercept, zslope_elevation
+    }
+  "
+  # Inits
   zintercept <- list(chain1 = min(zCWM), chain2 = mean(zCWM), chain3 = max(zCWM))
   zslope_elevation <- list(chain1 = c(-10), chain2 = c(10), chain3 = 0)
-  zhabitat_int <- list(chain1 = c(NA, min(zCWM)), chain2 = c(NA, mean(zCWM)), chain3 = c(NA, max(zCWM)))
-  zhabitat_slope <- list(chain1 = c(-10,-10), chain2 = c(10,10), chain3 = c(0,0))
+
   (results <- run.jags(model_string, n.chains = 3, 
-                      modules = "glm on", sample = 60000))
+                        modules = "glm on", sample = 40000))
   
-  results_summary <- as.data.frame(summary(results)) %>% 
+  results_summary <- as.data.frame(summary(results, vars = c("zintercept", "zslope_elevation", "zsd", "df"))) %>% 
     mutate(trait = selectedtrait,
            data = selecteddata)
+  
   if (!all(results_summary[,"SSeff"] >= 10000))
-    warn(paste("Effective sample size too low", selectedtrait, selecteddata))
-  saveRDS(results_summary, paste0("05_lm_switzerland_", selectedtrait, "_", selecteddata, ".rds"))
-
-  # save convergence diagnostics
-  plot(results, vars = c("zintercept", "zslope_elevation", "zhabitat_int[2]", "zhabitat_slope", "zsd"), 
-       file = paste0("Convergence_diagnostics/04_Covergence_correlation_regression_", selectedtrait,
-                              "_", selecteddata, ".pdf" ))
-  # gelman plots
-  pdf(paste0("Convergence_diagnostics/04_Gelman_correlation_regression_", selectedtrait,
-             "_", selecteddata, ".pdf"))
-  gelman.plot(results, vars = c("zintercept", "zslope_elevation", "zhabitat_int[2]","zhabitat_slope", "zsd"),  ask = FALSE)
-  dev.off()
-  
-  # Create points to predict on
-  lm_mcmc <- as.mcmc(results)
-  pred_cwm_mean <- apply(lm_mcmc[, grep("CWM_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, mean)
-  # Calculate confidence interval
-  credible_lower <- apply(lm_mcmc[, grep("CWM_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, quantile, prob = 0.05)
-  credible_upper <- apply(lm_mcmc[, grep("CWM_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, quantile, prob = 0.95)
-  df_pred <- tibble(elevation = c(Elev_pred_grass, Elev_pred_forest),
-                    habitat01 = Habitat_pred,
-                    cwm_mean = pred_cwm_mean,
-                    lower = credible_lower,
-                    upper = credible_upper)
-  
-  # plot model results
-  (p <- df_pred %>% 
-      ggplot(aes(x = elevation, y = cwm_mean, colour = habitat01)) +
-    geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, color = "grey") +
-    geom_line() +
-    # add data original data points
-    geom_point(data = cwm[cwm$trait == selectedtrait & cwm$standardized == "no",], 
-               aes(x = elevation, y = cwm_mean, colour = habitat01)) +
-    scale_y_continuous("") + 
-    scale_x_continuous("Elevation (m)") +
-    ggtitle(paste(labs_trait[selectedtrait], selecteddata)) +
-    theme_bw())
-  ggsave(paste0("Figures/CWM_elevation_", selectedtrait,"_", selecteddata, ".png"),p)
+    warn(paste("Effective sample size too low", selectedtrait, selecteddata, selectedhabitat))
   
   # check model assumptions
   # Extract residuals and fitted estimates:
   residuals <- resid(results)
   fitted <- fitted(results)
   
-  png(paste0("Figures/CWM_elevation_model_check_", selectedtrait,"_", selecteddata, ".png"))
+  png(paste0("Figures/CWM_elevation_model_check_", selectedtrait,"_", selecteddata,"_", selectedhabitat, ".png"))
   par(mfrow = c(2,1))
   # Plot of residuals indicates a potential problem:
   qqnorm(residuals); qqline(residuals)
@@ -247,7 +196,46 @@ lm_bay <- function(cwm, selectedtrait, selecteddata){
   # Looking at residuals vs fitted indicates increasing variance:
   plot(fitted, residuals); abline(h = 0)
   dev.off()
-}
+
+  # save convergence diagnostics
+  plot(results, vars = c("zintercept", "zslope_elevation", "zsd", "df"), 
+       file = paste0("Convergence_diagnostics/04_Covergence_correlation_regression_", selectedtrait,
+                              "_", selecteddata,"_",selectedhabitat, ".pdf" ))
+  # gelman plots
+  # pdf(paste0("Convergence_diagnostics/04_Gelman_correlation_regression_", selectedtrait,
+  #            "_", selecteddata,"_",selectedhabitat, ".pdf"))
+  # gelman.plot(results, vars = c("zintercept", "zslope_elevation", "zsd", "df"),  ask = FALSE)
+  # dev.off()
+  
+  # Create points to predict on
+  lm_mcmc <- as.mcmc(results)
+  pred_cwm_mean <- apply(lm_mcmc[, grep("CWM_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, mean)
+  # Calculate confidence interval
+  credible_lower <- apply(lm_mcmc[, grep("CWM_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, quantile, prob = 0.05)
+  credible_upper <- apply(lm_mcmc[, grep("CWM_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, quantile, prob = 0.95)
+  df_pred <- tibble(elevation = Elev_pred,
+                    habitat01 = selectedhabitat,
+                    data = selecteddata,
+                    cwm_mean = pred_cwm_mean,
+                    lower = credible_lower,
+                    upper = credible_upper,
+                    trait = selectedtrait)
+  saveRDS(df_pred, paste0("RDS_files/05_lm_switzerland_", selectedtrait, "_", selecteddata,"_",selectedhabitat, ".rds"))
+  
+  # plot model results
+  (p <- df_pred %>% 
+      ggplot(aes(x = elevation, y = cwm_mean)) +
+    geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, color = "grey") +
+    geom_smooth(method = "lm") +
+    # add data original data points
+    geom_point(data = cwm[cwm$trait == selectedtrait & cwm$standardized == "no" & cwm$habitat01 == selectedhabitat,], 
+               aes(x = elevation, y = cwm_mean)) +
+    scale_y_continuous("") + 
+    scale_x_continuous("Elevation (m)") +
+    ggtitle(paste(labs_trait[selectedtrait], selecteddata)) +
+    theme_bw())
+  ggsave(paste0("Figures/CWM_elevation_", selectedtrait,"_", selecteddata,"_", selectedhabitat, ".png"),p)
+  }
 
 labs_trait <- c("Height (log)(cm)",
                 "Leaf area (log)(mm2)",
@@ -256,13 +244,19 @@ names(labs_trait) <- c("PlantHeight", "LA", "SLA")
 
 cwm_veg <- dfCWM_veg %>% 
   filter(treatment == "Correction factor") 
-lm_veg <- purrr::map(names(labs_trait), ~lm_bay(cwm = cwm_veg, selectedtrait = .x, selecteddata = "Vegetation"))
+purrr::map(names(labs_trait), ~lm_bay(cwm = cwm_veg, selectedtrait = .x, 
+                                                selectedhabitat = "forests", selecteddata = "Vegetation"))
+purrr::map(names(labs_trait), ~lm_bay(cwm = cwm_veg, selectedtrait = .x, 
+                                      selectedhabitat = "grasslands", selecteddata = "Vegetation"))
 
 cwm_pol <- dfCWM_pol %>% 
   filter(treatment == "Correction factor") %>% 
   drop_na(elevation) %>% 
   filter(correction == "correction")
-lm_pol <- purrr::map(names(labs_trait), ~lm_bay(cwm = cwm_pol, selectedtrait = .x, selecteddata = "Pollen"))
+purrr::map(names(labs_trait), ~lm_bay(cwm = cwm_pol, selectedtrait = .x, 
+                                                selectedhabitat = "forests", selecteddata = "Pollen"))
+purrr::map(names(labs_trait), ~lm_bay(cwm = cwm_pol, selectedtrait = .x, 
+                                      selectedhabitat = "grasslands", selecteddata = "Pollen"))
 
 
 # Quick plots  ----
