@@ -17,6 +17,7 @@
 ## References:
 ## - Ch 17 Doing Bayesian analysis, Kruschke
 ## - cow_raising.R, Matt Denwood, PR statistics Bayesian course
+## - http://biometry.github.io/APES//LectureNotes/StatsCafe/Linear_models_jags.html
 ## ---------------------------
 
 set.seed(1)
@@ -102,13 +103,14 @@ dfCWM_veg <- veg_files %>%
          zone = str_remove(zone, pattern = "Scotland |Switzerland ")) %>% 
   left_join(bdm_meta, by = "sitename")
 
-saveRDS(dfCWM_pol, "RDS_files/04_zCWM_estimates_pollen_Switzerland.rds")
-saveRDS(dfCWM_veg, "RDS_files/04_zCWM_estimates_vegetation_Switzerland.rds")
+# saveRDS(dfCWM_pol, "RDS_files/04_zCWM_estimates_pollen_Switzerland.rds")
+# saveRDS(dfCWM_veg, "RDS_files/04_zCWM_estimates_vegetation_Switzerland.rds")
 
 selectedtrait <- "PlantHeight"
 
 # Linear model ----
 lm_bay <- function(cwm, selectedhabitat,  selectedtrait, selecteddata){
+  # Model data
   CWM <- cwm %>% 
     filter(habitat01 == selectedhabitat) %>% 
     filter(trait == selectedtrait) %>% 
@@ -156,43 +158,48 @@ lm_bay <- function(cwm, selectedhabitat,  selectedtrait, selecteddata){
       zintercept ~ dnorm(0, 1/(10)^2)
       zslope_elevation ~ dnorm(0, 1/(10)^2)
       df ~ dexp(1/30) # df of t distribution, Values of d) larger than about 30.0 make the t distribution roughly normal
+  
+      # transform to original scale
+      slope_elevation <- zslope_elevation * sd(CWM)/sd(Elev)
+      intercept <- zintercept * sd(CWM) + mean(CWM) - zslope_elevation*mean(Elev)*sd(CWM)/sd(Elev)
       
       # predict
       for(i in 1:Npred){
         zCWM_pred[i] ~ dt(zintercept +  zslope_elevation * zElev_pred[i], 1/zsd^2, df)
         CWM_pred[i] <- zCWM_pred[i] * sd(CWM) + mean(CWM) # transform to original scale
       }
-      #data# N, zCWM, zSD, zElev, Npred, zElev_pred, CWM
-      #monitor# zintercept, zslope_elevation, zsd, df, CWM_pred
+  
+      #data# N, zCWM, zSD, zElev, CWM, Elev, Npred, zElev_pred
+      #monitor# zintercept, zslope_elevation, zsd, df, slope_elevation, intercept, CWM_pred
       #residual# regression_residual
       #fitted# regression_fitted
-      #inits# zintercept, zslope_elevation
+      #inits# zintercept, zslope_elevation, df
     }
   "
   # Inits
-  zintercept <- list(chain1 = min(zCWM), chain2 = mean(zCWM), chain3 = max(zCWM))
-  zslope_elevation <- list(chain1 = c(-10), chain2 = c(10), chain3 = 0)
-
+  zintercept <- list(chain1 = min(zCWM)*0.1, chain2 = mean(zCWM), chain3 = max(zCWM)*10)
+  zslope_elevation <- list(chain1 = c(-5), chain2 = c(5), chain3 = 0)
+  df <- list(chain1 = 1/1, chain2 = 1/15, chain3 = 1/30)
+  
+  # Run model
   (results <- run.jags(model_string, n.chains = 3, 
                         modules = "glm on", sample = 40000))
   
+  # check for sufficient samples size
   results_summary <- as.data.frame(summary(results, vars = c("zintercept", "zslope_elevation", "zsd", "df"))) %>% 
     mutate(trait = selectedtrait,
            data = selecteddata)
-  
   if (!all(results_summary[,"SSeff"] >= 10000))
-    warn(paste("Effective sample size too low", selectedtrait, selecteddata, selectedhabitat))
+    warn(paste("Effective sample size potentially too low", selectedtrait, selecteddata, selectedhabitat))
   
   # check model assumptions
   # Extract residuals and fitted estimates:
   residuals <- resid(results)
   fitted <- fitted(results)
-  
   png(paste0("Figures/CWM_elevation_model_check_", selectedtrait,"_", selecteddata,"_", selectedhabitat, ".png"))
   par(mfrow = c(2,1))
   # Plot of residuals indicates a potential problem:
   qqnorm(residuals); qqline(residuals)
-  
   # Looking at residuals vs fitted indicates increasing variance:
   plot(fitted, residuals); abline(h = 0)
   dev.off()
@@ -201,126 +208,145 @@ lm_bay <- function(cwm, selectedhabitat,  selectedtrait, selecteddata){
   plot(results, vars = c("zintercept", "zslope_elevation", "zsd", "df"), 
        file = paste0("Convergence_diagnostics/04_Covergence_correlation_regression_", selectedtrait,
                               "_", selecteddata,"_",selectedhabitat, ".pdf" ))
-  # gelman plots
-  # pdf(paste0("Convergence_diagnostics/04_Gelman_correlation_regression_", selectedtrait,
-  #            "_", selecteddata,"_",selectedhabitat, ".pdf"))
-  # gelman.plot(results, vars = c("zintercept", "zslope_elevation", "zsd", "df"),  ask = FALSE)
-  # dev.off()
-  
-  # Create points to predict on
+
+  # plot model results
   lm_mcmc <- as.mcmc(results)
-  pred_cwm_mean <- apply(lm_mcmc[, grep("CWM_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, mean)
-  # Calculate confidence interval
-  credible_lower <- apply(lm_mcmc[, grep("CWM_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, quantile, prob = 0.05)
-  credible_upper <- apply(lm_mcmc[, grep("CWM_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, quantile, prob = 0.95)
+  # credibility around model parameters
+  pred_cwm_mean <- mean(lm_mcmc[,"intercept"]) + Elev_pred * mean(lm_mcmc[,"slope_elevation"])
+  pred_mean_dist <- matrix(NA, nrow = nrow(lm_mcmc), ncol = length(Elev_pred))
+  for (i in 1:nrow(pred_mean_dist)) {
+    pred_mean_dist[i,] <- lm_mcmc[i,"intercept"] + Elev_pred * lm_mcmc[i,"slope_elevation"]
+  }
+  credible_lower <- apply(pred_mean_dist, MARGIN = 2, quantile, prob = 0.05)
+  credible_upper <- apply(pred_mean_dist, MARGIN = 2, quantile, prob = 0.95)
+  # uncertainty in prediction
+  uncertainty_lower <- apply(lm_mcmc[, grep("CWM_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, quantile, prob = 0.05)
+  uncertainty_upper <- apply(lm_mcmc[, grep("CWM_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, quantile, prob = 0.95)
+
   df_pred <- tibble(elevation = Elev_pred,
                     habitat01 = selectedhabitat,
                     data = selecteddata,
                     cwm_mean = pred_cwm_mean,
-                    lower = credible_lower,
-                    upper = credible_upper,
+                    credible_lower = credible_lower,
+                    credible_upper = credible_upper,
+                    uncertainty_lower = uncertainty_lower,
+                    uncertainty_upper = uncertainty_upper,
                     trait = selectedtrait)
   saveRDS(df_pred, paste0("RDS_files/05_lm_switzerland_", selectedtrait, "_", selecteddata,"_",selectedhabitat, ".rds"))
   
-  # plot model results
-  (p <- df_pred %>% 
-      ggplot(aes(x = elevation, y = cwm_mean)) +
-    geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, color = "grey") +
-    geom_smooth(method = "lm") +
-    # add data original data points
-    geom_point(data = cwm[cwm$trait == selectedtrait & cwm$standardized == "no" & cwm$habitat01 == selectedhabitat,], 
-               aes(x = elevation, y = cwm_mean)) +
+ (p <- ggplot(df_pred, aes(x = elevation, y = cwm_mean)) +
+    geom_ribbon(aes(ymin = credible_lower, ymax = credible_upper), alpha = 0.2, color = "grey") +
+    geom_ribbon(aes(ymin = uncertainty_lower, ymax = uncertainty_upper), alpha = 0.2, color = "grey") +
+    geom_line(color = "darkgreen") +
+    geom_point(data = cwm[cwm$trait == selectedtrait & cwm$standardized == "no" & cwm$habitat01 == selectedhabitat,], aes(x = elevation, y = cwm_mean)) +
     scale_y_continuous("") + 
     scale_x_continuous("Elevation (m)") +
-    ggtitle(paste(labs_trait[selectedtrait], selecteddata)) +
     theme_bw())
   ggsave(paste0("Figures/CWM_elevation_", selectedtrait,"_", selecteddata,"_", selectedhabitat, ".png"),p)
   }
 
-labs_trait <- c("Height (log)(cm)",
-                "Leaf area (log)(mm2)",
-                "SLA (log) (mm2/mg)")
-names(labs_trait) <- c("PlantHeight", "LA", "SLA")
-
+traits <- dfCWM_pol$trait %>% unique()
 cwm_veg <- dfCWM_veg %>% 
-  filter(treatment == "Correction factor") 
-purrr::map(names(labs_trait), ~lm_bay(cwm = cwm_veg, selectedtrait = .x, 
+  filter(treatment == "Correction factor") %>% 
+  mutate(trait = factor(trait, level = c("LA", "PlantHeight", "SLA"),
+                        labels = c(LA = "Leaf~area~(mm^{2})(log)",
+                                   PlantHeight = "Height~(cm)(log)",
+                                   SLA = "SLA~(mm^{2}/mg)(log)"))) 
+purrr::map(traits, ~lm_bay(cwm = cwm_veg, selectedtrait = .x, 
                                                 selectedhabitat = "forests", selecteddata = "Vegetation"))
-purrr::map(names(labs_trait), ~lm_bay(cwm = cwm_veg, selectedtrait = .x, 
+purrr::map(traits, ~lm_bay(cwm = cwm_veg, selectedtrait = .x, 
                                       selectedhabitat = "grasslands", selecteddata = "Vegetation"))
 
 cwm_pol <- dfCWM_pol %>% 
   filter(treatment == "Correction factor") %>% 
   drop_na(elevation) %>% 
-  filter(correction == "correction")
-purrr::map(names(labs_trait), ~lm_bay(cwm = cwm_pol, selectedtrait = .x, 
+  filter(correction == "correction") %>% 
+  mutate(trait = factor(trait, level = c("LA", "PlantHeight", "SLA"),
+                        labels = c(LA = "Leaf~area~(mm^{2})(log)",
+                                   PlantHeight = "Height~(cm)(log)",
+                                   SLA = "SLA~(mm^{2}/mg)(log)"))) 
+purrr::map(traits, ~lm_bay(cwm = cwm_pol, selectedtrait = .x, 
                                                 selectedhabitat = "forests", selecteddata = "Pollen"))
-purrr::map(names(labs_trait), ~lm_bay(cwm = cwm_pol, selectedtrait = .x, 
+purrr::map(traits, ~lm_bay(cwm = cwm_pol, selectedtrait = .x, 
                                       selectedhabitat = "grasslands", selecteddata = "Pollen"))
 
 
-# Quick plots  ----
-## Vegetation
-### Elevation
-dfCWM_veg %>% 
-  filter(treatment == "Correction factor")  %>% 
-  filter(standardized == "no") %>% 
-ggplot(.,aes(x = elevation, y = cwm_mean, colour = habitat01)) +
-  geom_point()  +
-  geom_smooth(method = "lm") +
-  facet_wrap(.~trait, scales = "free") +
-  theme_bw()
-### MAT
-dfCWM_veg %>% 
-  filter(treatment == "Correction factor")  %>% 
-  filter(standardized == "no") %>% 
-ggplot(., aes(x = MAT, y = cwm_mean, colour = habitat01)) +
-  geom_point()  +
-  geom_smooth(method = "lm") +
-  facet_wrap(.~trait, scales = "free") +
-  theme_bw()
-### TAP
-dfCWM_veg %>% 
-  filter(treatment == "Correction factor")  %>% 
-  filter(standardized == "no") %>% 
-  ggplot(., aes(x = TAP, y = cwm_mean, colour = habitat01)) +
-  geom_point()  +
-  geom_smooth(method = "lm") +
-  facet_wrap(.~trait, scales = "free") +
-  theme_bw()
+lm_files <- list.files("RDS_files/") %>% 
+  str_subset(pattern = "05_lm")
 
-## Pollen
-### Elevation
-dfCWM_pol %>% 
-  filter(treatment == "Correction factor") %>% 
-  filter(correction == "correction") %>% 
-  filter(standardized == "no") %>% 
-ggplot(.,aes(x = elevation, y = cwm_mean, color = habitat01)) +
-  geom_point()  +
-  geom_smooth(method = "lm") +
-  facet_wrap(.~trait, scales = "free") +
-  theme_bw()
+lm_values <- lm_files %>% 
+  folderpath.fun(.) %>% 
+  purrr::map_df(~readRDS(.)) 
 
-### MAT
-dfCWM_pol %>% 
-  filter(treatment == "Correction factor") %>% 
-  filter(correction == "correction") %>% 
-  filter(standardized == "no") %>% 
-ggplot(.,aes(x = MAT, y = cwm_mean, color = habitat01)) +
-  geom_point()  +
-  geom_smooth(method = "lm") +
-  facet_wrap(.~trait, scales = "free") +
-  theme_bw()
+# plot model results
+cwm_range <- cwm_veg %>%
+  left_join(cwm_pol, by = c("sitename", "trait")) %>% 
+  group_by(trait) %>%
+  summarise(across(c("cwm_mean.x","cwm_mean.y"), ~range(., na.rm = T))) %>%
+  transmute(max_lim = max(cwm_mean.x, cwm_mean.y, na.rm = T),
+            min_lim = min(cwm_mean.x, cwm_mean.y, na.rm = T)) %>%
+  pivot_longer(-trait, names_to = "limits", values_to = "cwm_mean") %>%
+  mutate(elevation = rep(c(400,2600,400,2600)), habitat01 = NA) 
+ 
 
-### TAP
-dfCWM_pol %>% 
-  filter(treatment == "Correction factor") %>% 
-  filter(correction == "correction") %>% 
-  filter(standardized == "no") %>% 
-ggplot(.,aes(x = TAP, y = cwm_mean, color = habitat01)) +
-  geom_point()  +
-  geom_smooth(method = "lm") +
-  facet_wrap(.~trait, scales = "free") +
-  theme_bw()
+(p <- lm_values %>% 
+    filter(data == "Vegetation" ) %>% 
+    mutate(trait = factor(trait, level = c("LA", "PlantHeight", "SLA"),
+                          labels = c(LA = "Leaf~area~(mm^{2})(log)",
+                                            PlantHeight = "Height~(cm)(log)",
+                                            SLA = "SLA~(mm^{2}/mg)(log)"))) %>% 
+    ggplot(aes(x = elevation, y = cwm_mean, colour = habitat01)) +
+    geom_ribbon(aes(ymin = uncertainty_lower, ymax = uncertainty_upper, fill = habitat01), 
+                alpha = 0.2, colour = NA) +
+    geom_ribbon(aes(ymin = credible_lower, ymax = credible_upper, fill = habitat01), 
+                alpha = 0.2, colour = NA) +
+    geom_line() +
+    geom_point(data = cwm_veg[cwm_veg$standardized == "no",], aes(x = elevation, y = cwm_mean), size = 0.75) +
+    geom_blank(data = cwm_range) +
+    scale_color_manual(values = c(forests = "darkorange", grasslands = "purple"),
+                       label = c(forests = "Forests", grasslands = "Grassland")) + 
+    scale_fill_manual(values = c(forests = "darkorange", grasslands = "purple"),
+                       label = c(forests = "Forest", grasslands = "Grassland")) + 
+    scale_y_continuous("") + 
+    scale_x_continuous("Elevation (m.s.l)", limits = c(400,2600)) +
+    facet_wrap(~trait, scales = "free",
+               labeller = label_parsed) + 
+    theme_bw() +
+    theme(legend.position =  "bottom",
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          legend.title = element_blank()) +
+   guides(fill = "none"))
+ggsave("Figures/CWM_elevation_vegetaion.png", p, width = 7, height = 4)
+
+(p <- lm_values %>% 
+    filter(data == "Pollen" ) %>% 
+    mutate(trait = factor(trait, level = c("LA", "PlantHeight", "SLA"),
+                          labels = c(LA = "Leaf~area~(mm^{2})(log)",
+                                     PlantHeight = "Height~(cm)(log)",
+                                     SLA = "SLA~(mm^{2}/mg)(log)"))) %>% 
+    ggplot(aes(x = elevation, y = cwm_mean, colour = habitat01)) +
+    geom_ribbon(aes(ymin = uncertainty_lower, ymax = uncertainty_upper, fill = habitat01), 
+                alpha = 0.2, colour = NA) +
+    geom_ribbon(aes(ymin = credible_lower, ymax = credible_upper, fill = habitat01), 
+                alpha = 0.2, colour = NA) +
+    geom_line() +
+    geom_point(data = cwm_pol[cwm_pol$standardized == "no",], aes(x = elevation, y = cwm_mean), size = 0.75) +
+    geom_blank(data = cwm_range) +
+    scale_color_manual(values = c(forests = "darkorange", grasslands = "purple"),
+                       label = c(forests = "Forests", grasslands = "Grassland")) + 
+    scale_fill_manual(values = c(forests = "darkorange", grasslands = "purple"),
+                      label = c(forests = "Forest", grasslands = "Grassland")) + 
+    scale_y_continuous("") + 
+    scale_x_continuous("Elevation (m.s.l)", limits = c(400,2600)) +
+    facet_wrap(~trait, scales = "free",
+               labeller = label_parsed) + 
+    theme_bw() +
+    theme(legend.position =  "bottom",
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          legend.title = element_blank()) +
+    guides(fill = "none"))
+ggsave("Figures/CWM_elevation_pollen.png", p, width = 7, height = 4)
 
 
