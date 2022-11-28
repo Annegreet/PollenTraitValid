@@ -270,7 +270,8 @@ purrr::map(traits, ~lm_bay(cwm = cwm_pol, selectedtrait = .x,
 purrr::map(traits, ~lm_bay(cwm = cwm_pol, selectedtrait = .x, 
                                       selectedhabitat = "grasslands", selecteddata = "Pollen"))
 
-
+# Plotting ----
+# load in lm results
 lm_files <- list.files("RDS_files/") %>% 
   str_subset(pattern = "05_lm")
 
@@ -279,12 +280,15 @@ lm_values <- lm_files %>%
   purrr::map_df(~readRDS(.)) 
 
 # plot model results
-cwm_range <- cwm_veg %>%
-  left_join(cwm_pol, by = c("sitename", "trait")) %>% 
+cwm_range <- lm_values %>% 
+  mutate(trait = factor(trait, level = c("LA", "PlantHeight", "SLA"),
+                        labels = c(LA = "Leaf~area~(mm^{2})(log)",
+                                   PlantHeight = "Height~(cm)(log)",
+                                   SLA = "SLA~(mm^{2}/mg)(log)"))) %>% 
   group_by(trait) %>%
-  summarise(across(c("cwm_mean.x","cwm_mean.y"), ~range(., na.rm = T))) %>%
-  transmute(max_lim = max(cwm_mean.x, cwm_mean.y, na.rm = T),
-            min_lim = min(cwm_mean.x, cwm_mean.y, na.rm = T)) %>%
+  summarise(across(c("uncertainty_lower","uncertainty_upper"), ~range(., na.rm = T))) %>%
+  transmute(max_lim = max(uncertainty_upper, na.rm = T),
+            min_lim = min(uncertainty_lower, na.rm = T)) %>%
   pivot_longer(-trait, names_to = "limits", values_to = "cwm_mean") %>%
   mutate(elevation = rep(c(400,2600,400,2600)), habitat01 = NA) 
  

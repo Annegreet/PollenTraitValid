@@ -186,9 +186,9 @@ corrplot <- function(rhos, nobs, labels){
                   position = position_dodge(0.5)) +
     geom_point(shape = 21, size = 2, position = position_dodge(0.5)) +
     # labels and scales
-    scale_x_discrete("", labels = c("zoneA" = "Zone A", 
-                                    "zoneB" = "Zone B", 
-                                    "zoneC"  = "Zone C")) +
+    scale_x_discrete("", labels = c("zoneA" = "Inner ring (0-10 m)", 
+                                    "zoneB" = "Middle ring (10-100 m)", 
+                                    "zoneC"  = "Outer ring (100-1000 m)")) +
     scale_y_continuous("", limits = c(-1,1)) +
     scale_fill_manual("", values = c("darkorange", "purple", "cyan4"),
                       labels = labels) +

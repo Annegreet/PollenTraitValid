@@ -30,6 +30,8 @@ bdm_meta <- readRDS("RDS_files/01_Meta_data_BDM.rds")
 
 ## Abstract
 
+-   needs more testing
+
 ## Introduction
 
 Functional traits provide a better insight in to the processes that drive biodiversity and how biodiversity affects ecosystem functioning [@Hevia_2017]. While the functioning of modern ecosystems is regularly contingent on past human and environmental factors [@Levis_2018; @Jogiste_2017; @Blonder_2018; ], the observational duration of trait-based studies is generally at most a couple of decades [@Estes_218]. So to extend the time scales of ecosystem functioning research, considerable interest in the trait-based approach has arisen in palaeoecology [@Brussel_2018; @Blaus_2020; @Carvalho_2019; @Reitalu_2015; @Sande_2019]. Applying the trait-based approach in palaeoecological studies could offer a new way of interpreting pollen data and increase our understanding of the drivers of vegetation change on time-scales of centuries to millennia. For instance, @Sande_2019 found that on a 7000-year time scale human disturbance supersedes climate effects on plant trait composition in the Amazon.
@@ -40,7 +42,7 @@ Taxonomic differences in pollen dispersal and production can cause an over- or u
 
 Perhaps the most challenging in reliably reconstructing past trait composition is to attribute functional trait data to the taxa found in pollen records, as it is rarely possible to resolve the pollen record to the species level [@Birks_2020]. Trait variation within taxa can be substantial depending on the trait and the diversity of the taxon [@Albert_2010; @Prinzing_2008]. It can be expected that this is especially problematic in the case of large, abundant plant families that cannot easily be resolved to a lower taxonomic level, such as the Poaceae family. @Blaus_2020 and @Carvalho_2019 proposed that the high species number included in herbaceous pollen taxon could be one of the reasons why herbaceous vegetation was less well represented by pollen based functional diversity reconstructions. In both studies, however, traits values of pollen taxa were calculated by averaging over the available species level trait information. In this study, we use a Bayesian approach for modelling trait composition from pollen data, thereby allowing for the propagation of uncertainty in the taxon level trait reconstruction to the community level.
 
-With this study, we aim to test the validity of using pollen records for past plant trait composition reconstruction. We address two questions. Firstly, what factors influence the pollen - vegetation trait relationship? Using a data set from the Cairngorms, Scotland, we investigate the effect of spatial scale, plant functional group, correction factors and taxonomic resolution on the representativeness of the pollen assemblages for functional trait reconstruction. Secondly, can pollen based trait reconstruction predict changes in trait composition along environmental gradients? Using pollen, vegetation and trait data collected along an elevation gradient in Switzerland we test if pollen assemblages can predict changes in trait composition with elevation.
+With this study, we aim to test the validity of using pollen records for past plant trait composition reconstruction. We address two questions. Firstly, what factors influence the pollen - vegetation trait relationship? Using a data set from the Cairngorms, Scotland, we investigate the effect of spatial scale, plant functional group, correction factors and taxonomic resolution on the representativeness of the pollen assemblages for functional trait reconstruction. Secondly, can pollen based trait reconstruction predict changes in trait composition along environmental gradients? Using pollen, vegetation and trait data collected along an elevation gradient in Switzerland we test if pollen assemblages can predict relative changes in trait composition with elevation.
 
 ## Method
 
@@ -78,62 +80,80 @@ $$
 CWM_{s} \sim \sum^{n}\pi_{j}Normal(\mu_{j},\sigma_{j})
 $$
 
-Where *n* is the total number of taxa, and $\pi_{j}$ the abundance of each pollen taxon or species at a given site *s*. The mean *CWM~­~^mean^* and the standard deviation *CWM^sd^* of this modelled distribution was subsequently used in the estimation of the correlation between the trait composition of the vegetation and the pollen data.
+Where *n* is the total number of taxa, and $\pi_{j}$ the abundance of each pollen taxon or species at a given site *s*. The mean ($CWM_{mean}$) and the standard deviation ($CWM_{sd}$)of this modelled distribution was subsequently used in the estimation of the correlation between the trait composition of the vegetation and the pollen data.
 
-### Correlation between pollen and vegetation community weighted mean
+### Relationship between pollen and vegetation community weighted mean
 
-To test the correlation between the pollen based reconstruction of CWM and the vegetation CWM, we used a multivariate normal distribution to estimate correlation coefficient $\rho$ so that,
+To test the relationship between the pollen based reconstruction of CWM and the vegetation CWM, we standardized the CWM values and fitted a students-t distributed likelihood for pollen CWM ($CWM_{mean}^{pol}$) with vegetation CWM ($CWM_{mean}^{veg}$) as the single predictor so that,
 
-$$  [CWM_{s}^{veg},CWM_{s}^{veg}] \sim MultivariateNormal([\mu_{veg},\mu_{veg}],\sum) $$
+$$  CWM_{mean}^{pol} \sim t(\beta_{t} CWM_{mean}^{veg},CWM_{sd}^{pol},df) $$
 
-$$
-\sum \sim \begin{pmatrix} \sigma_{veg}^{2} & \rho\sigma_{veg}\sigma_{pol} \\ \rho\sigma_{veg}\sigma_{pol} & \sigma_{pol}^{2} \end{pmatrix}
-$$
-
-$$
-\rho \sim Uniform(-1,1)
+The slope $\beta_{t}$ is a correlation-like metric defined with a flat, uninformative prior. $$
+\beta \sim Uniform(-1,1)
 $$
 
-Correlations were calculated for the different treatments, all zones and three traits: SLA, LA and plant height.
+We estimated the degrees of freedom ($df$) of the t-distribution with and exponential prior with a mean of 30, the t-distribution becomes almost normal at values of 30 and above (Kruscke, dbda),
+
+$$
+df \sim Exp(\lambda)
+$$
+
+$$
+\lambda = 1/30
+$$
+
+We ran this model for every trait and zone in Scotland, and for the following different treatments: the use of correction factors, sub-setting the data in plant functional type, sub-setting the data in pollination mode and modelling on different taxonomic resolutions
 
 ### Community weighted mean changes with elevation
 
-To test if relative trait compositional changes are reflected by the pollen data along an elevation gradient, we fitted a generalized linear model with elevation as the predictor, so that
+To test if trait compositional changes of the vegetation along an elevation gradient are reflected by pollen based trait reconstructions, we fitted a generalized linear model with elevation as the predictor, so that the likelihood of the CWM value is defined as follows,
 
-$$CWM^{mean} \sim Normal(\alpha + \beta Y_{elev}, CWM^{sd})$$
+$$CWM^{mean} \sim t(\alpha + \beta Y_{elev}, CWM^{sd},df)$$
 
-Where $\alpha$ and $\beta$ are the intercept and the slope, respectively, which are supplied by uninformative priors. $Y_{elev}$ is the elevation as the linear predictor.
+Where $\alpha$ and $\beta$ are the intercept and the slope, respectively, which are supplied by uninformative priors. $Y_{elev}$ is the elevation as the linear predictor. We modelled this relationship for the grassland and forest plots separately.
 
 ## Results
 
-### Effect of correction factors
+Over all treatments and spatial scales, we only found evidence of a significant positive relationship between pollen-based reconstructed CWM trait values and vegetation CWM values for plant height. We found little support for a positive association between pollen and vegetation trait value for leaf area and specific leaf area. The spatial scale matters for the relationship between pollen plant height and vegetation plant height, only at scales between 10-100 m the relationship is significant.
 
-![Estimated correlation between the pollen data and vegetation data. Whisker plots show the median estimated correlation coefficient and the 95% credibility interval.](Figures/Pollen_correction_factors.png)
+Although pollen productivity estimates do seem to improve the representation of the taxa in the vegetation by the pollen data (Supplementary information), it does not help to improve the pollen-vegetation trait relationships. Taking in account uncertainty around pollen productivity estimates, does XXX by between --- and ---
+
+![Estimaed correlation between the pollen data and vegetation data. Whisker plots show the mean estimated correlation coefficient and the 95% credibility interval. Sample size is noted above the mean correlation coefficient.](Figures/Pollen_correction_factors_regression.png)
 
 \* add uncertainty around pollen correction factors
 
-### Pollination mode
+We expected that the trait composition of wind-pollinated and woody vegetation would be better represented by the pollen data, especially at greater spatial scale. The plant height of not wind-pollinated taxa is well represented by the pollen data at the smallest spatial scale (0-10 m), but not at greater spatial scales or for other traits. The subset of wind-pollinated taxa does not show significant relsationships. Sub-setting pollen and vegetation data in to woody and non-woody vegetation did not improve pollen - vegetation trait relationships.
 
-![Estimated correlation between the pollen data and vegetation data. Whisker plots show the median estimated correlation coefficient and the 95% credibility interval.](Figures/Pollination_mode.png)
+![Estimated correlation between the pollen data and vegetation data. Whisker plots show the mean estimated correlation coefficient and the 95% credibility interval. Sample size is noted above the mean correlation coefficient.](Figures/Pollination_mode_regression.png)
 
-### Plant functional group
+![Estimated correlation between the pollen data and vegetation data. Whisker plots show the mean estimated correlation coefficient and the 95% credibility interval. Sample size is noted above the mean correlation coefficient.](Figures/PFT_regression.png)
 
-![Estimated correlation between the pollen data and vegetation data. Whisker plots show the median estimated correlation coefficient and the 95% credibility interval.](Figures/PFT.png)
+We expected pollen to better represent trait composition at higher taxonomic resolution, family or genus level, because of the general low taxonomic resolution of pollen data. We did not find that increasing the taxonomic resolution on which the trait distribution are modelled, improves the relationship between pollen and vegetation trait values.
 
-### Effect of taxonomic resolution
-
-![Estimated correlation between the pollen data and vegetation data. Whisker plots show the median estimated correlation coefficient and the 95% credibility interval.](Figures/Taxonomic_resolution.png)
+![Estimated correlation between the pollen data and vegetation data. Whisker plots show the mean estimated correlation coefficient and the 95% credibility interval. Sample size is noted above the mean correlation coefficient.](Figures/Taxonomic_resolution_regression.png)
 
 ### CWM change with elevation
 
-![CWM trait change with elevation for Leaf area, plant height and specific leaf area. Left column shows the CWM values for the vegetation data, right column shows the CWM values for the pollen data. Green lines show the relationships from the linear model, grey area shows the 95% credibility interval. Leaf area and plant height were log transformed before modelling.](Figures/20221016-Swiss_elevation_combined.png)
+We expected to pollen to reproduce similar trends in trait change along an elevation gradient. Pollen do not represent the changes in vegetation CWM values well. Pollen underestimate LA and SLA values and the decrease in LA and SLA in grasslands that was observed in the vegetation is not predicted by the pollen data. Also the steep decrease in plant height along the elevation gradient is not reproduced by the pollen data, and the plant height in grassland is overestimated.
+
+![Vegetation CWM trait change with elevation for leaf area, plant height and specific leaf area and two vegetation types: forest and grassland. Darker shaded area shows the 95% credibility interval and lighter shade area shows the 95% prediction interval.](Figures/CWM_elevation_vegetaion.png)
+
+![Pollen CWM trait change with elevation for leaf area, plant height and specific leaf area and two vegetation types: forest and grassland. Darker shaded area shows the 95% credibility interval and lighter shade area shows the 95% prediction interval.](Figures/CWM_elevation_pollen.png)
 
 ## Discussion
+
+Pollen are the main proxy for reconstructing past plant composition, but the relationship between pollen assemblages and the vegetation composition is complicated. Although X-Y have showed positive relationships between pollen and vegetation composition, these are reasons why to be cautious
 
 -   representativeness of trait databases for trait measurements in the field?
 
     -   Sandel (2015) - trait databases are biased towards big leaved and big seeded plants
     -   Prinzing (2008) - Less lineages -- more trait variation
+
+-   Look for elevation studies in pollen ecology
+
+-   Being careful about apply trait based palaeoecology
+
+    -   bigger sample size
 
 -   Comparison between Switzerland and Scotland methods of sampling
 
@@ -143,13 +163,31 @@ Where $\alpha$ and $\beta$ are the intercept and the slope, respectively, which 
 
 -   Interspecific trait variation in LA
 
+-   positive relationships found by others
+
 -   Some pollen types consider many more species than others for example in this study XX . This is also identified as a problem in plant richness studies (Reitalu 2019) and trait rep (Carvalho, Blaus). although bayesian xxx
+
+-   Relationship is not significant, though still could be positive, as enocmpossed by the 95% confidence interval. More data, less uncertainty in the CWM estimates .
 
 -   size of the relevant source area (Bunting 2003)
 
     -   The spatial resolution of a pollen assemblage is difficult to assess and is dependent on several factors, such as differences in taxon-specific differences in pollen productivity and dispersal and landscape structure
 
-    -   here we surveyed sites with different openness.
+    -   here we surveyed sites with different openness .
+
+    -   The relationship between spatial scale and pollen records is complex (\@Abraham_2022) and dependant on the species richness and landscape openness
+
+        -   forest data not significantly related to florisitc data while open landscapes are.
+
+        -   highest correlation between pollen and species within 1.5-70 m in open landscapes
+
+        -   high correlation with pollen richness and landscape openess
+
+        -   Changes in the relationship with changing spatial scale are largely driven by the numbers of species newly appearing as the radius of surveyed area increases, especially as new habitats are added (DIRECT COPY)
+
+-   High productivity of tree pollen bias pollen-plant diversity relationships @Odgaard_1999
+
+-   Trees intercept pollen in their canopies @Jackson_1999
 
 -   pollen based trait reconstructions have been shown to correctly reflect environmental gradients as elevation (Sande) and and climatic variations (Barboni)
 
@@ -161,9 +199,9 @@ Where $\alpha$ and $\beta$ are the intercept and the slope, respectively, which 
 
 ### Pollen representation
 
-![Scatter plot of vegetation basal area % against pollen abundance %](Figures/Pollen_rep_percent.png)
+![Scatter plot of vegetation basal area % against pollen abundance %. Coloured dots represent either wind or non-wind pollinated taxa.](Figures/Pollen_rep_percent.png)
 
-![Scatter plot of vegetation basal area % against pollen abundance % adjusted with pollen productivity estimates.](Figures/Pollen_rep_adjustedpercent.png)
+![Scatter plot of vegetation basal area % against pollen abundance % adjusted with pollen productivity estimates. Grey dots show the effect of uncertainty around pollen productivity estimates. Coloured dots represent either wind or non-wind pollinated taxa.](Figures/Pollen_rep_adjustedpercent.png)
 
 ### Study design
 
@@ -173,10 +211,37 @@ Where $\alpha$ and $\beta$ are the intercept and the slope, respectively, which 
 
 ![Design of Swiss trait sampling and vegetation surveys. The moss sample was collected in the centre of the plot.](Other/BDM_study_design.png)
 
+```{r}
+bdm_meta <- readRDS("RDS_files/04_zCWM_estimates_vegetation_Switzerland.rds")
+
+ggplot(data = bdm_meta) + 
+  geom_point(aes(x = elevation, y = TAP, colour = habitat01)) +
+  scale_color_manual("", 
+                     values = c(forests = "darkorange", grasslands = "purple"),
+                     label = c(forests = "Forests", grasslands = "Grassland")) + 
+  scale_x_continuous("Elevation (m.s.l.)") +
+  scale_y_continuous("Total annual precipitation (mm)") +
+  theme_bw()
+
+ggplot(data = bdm_meta) + 
+  geom_point(aes(x = elevation, y = MAT, colour = habitat01)) +
+  scale_color_manual("", 
+                     values = c(forests = "darkorange", grasslands = "purple"),
+                     label = c(forests = "Forests", grasslands = "Grassland")) + 
+  scale_x_continuous("Elevation (m.s.l.)") +
+  scale_y_continuous("Mean annual temperature (°C)") +
+  theme_bw()
+
+```
+
 ### Trait data
 
-![](Figures/LA_trait_values.png)
+![Comparison between the trait data collected in the field with trait data obtained from TRY](Figures/LA_trait_values.png)
 
-![](Figures/PlantHeight_trait_values.png)
+![Comparison between the trait data collected in the field with trait data obtained from TRY](Figures/PlantHeight_trait_values.png)
 
-![](Figures/SLA_trait_values.png)
+![Comparison between the trait data collected in the field with trait data obtained from TRY](Figures/SLA_trait_values.png)
+
+### Taxon level trait values
+
+![Estimated trait values of pollen taxa and the data](Figures/Trait_values_pollen_LA.png) ![Estimated trait values of pollen taxa and the data](Figures/Trait_values_pollen_SLA.png) ![Estimated trait values of pollen taxa and the data](Figures/Trait_values_pollen_PH.png) ![Estimated trait values of vegetation taxa and the data](Figures/Trait_values_vegetation_LA.png) ![Estimated trait values of vegetation taxa and the data](Figures/Trait_values_vegetation_SLA.png) ![Estimated trait values of vegetation taxa and the data](Figures/Trait_values_vegetation_PH.png) \### Scatterplots pollen and vegetation trait values
