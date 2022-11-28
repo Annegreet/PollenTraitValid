@@ -1,7 +1,8 @@
 model {
     for (i in 1:Nsites){
-      cwm[i] ~ dnorm(mean.tax.log[r[i]], 1/sd.tax.log[r[i]]^2)
-      r[i] ~ dcat(Ab[i, 1:Ntax])
+       cwm[i] ~ dnorm(mean.tax.log[r[i]], 1/sd.tax.log[r[i]]^2)
+       r[i] ~ dcat(Ab[i, 1:Ntax])
+       zcwm[i] <- (cwm[i] - mean(cwm[1:Nsites]))/sd(cwm[1:Nsites])
     }
     for (i in 1:N) {
       Trait[i] ~ dlnorm(mean.tax.log[Tax[i]], 1/sd.tax.log[Tax[i]]^2)
@@ -10,11 +11,10 @@ model {
       # vague priors taxon level
       mean.tax.log[l] ~ dnorm(MeanLog[l], 1/(10*SDLog[l])^2)
       sd.tax.log[l] ~ dunif(SDLog[l]*0.001, SDLog[l]*1000)
-      
     }
     
     #data# N, Nsites, Trait, Tax, Ntax, Ab, MeanLog, SDLog
-    #monitor# mean.tax.log, sd.tax.log, cwm
-    #inits# mean.tax.log, sd.tax.log, cwm
+    #monitor# mean.tax.log, sd.tax.log, cwm, zcwm
+    #inits# mean.tax.log, sd.tax.log
     
   }
