@@ -333,7 +333,7 @@ nobs_pft <- cwm_herb %>%
   dplyr::select(label,  zone, trait, Mean, treatment = "growthform") %>% 
   ungroup() %>% 
   arrange(trait) %>% 
-  mutate(x = rep(c(3,1.75,2,0.75,1), 3))
+  mutate(x = rep(c(2.84,1.75,2,0.75,1), 3))
 
 p_rho <- corrplot(rhos_pft, nobs_pft, c("trsh" = "Woody", "herb" = "Non-Woody"))
 ggsave("Figures/PFT_regression.png", p_rho, width = 7, height = 3)
@@ -349,8 +349,7 @@ cwm_gen <- dfCWM_pol %>%
          pollination == "allpol",
          correction == "no correction") %>% 
   left_join(dfCWM_veg, by = c("country", "sitename", "trait", "growthform", "pollination")) %>% 
-  filter(taxres == "genus") %>% 
-  mutate(x = rep(c(0.75,1,1.75,2,2.75,3), 3))
+  filter(taxres == "genus") 
 
 rhos_gen <- purrr::map2_dfr(combo$zone, combo$trait, 
                                    ~cor_bay(cwm_gen, selectedzone = .x, selectedtrait = .y,
@@ -378,8 +377,10 @@ nobs_taxres <- cwm_fam %>%
   left_join(rhos_taxres[rhos_taxres$parameter == "slope", ], by = c("trait",  "zone", "taxres" = "treatment")) %>%
   dplyr::select(label,  zone, trait, Mean, treatment = "taxres") %>%
   ungroup() %>%
-  arrange(trait) %>%
-  mutate(x = 0)
+  arrange(trait) %>% 
+  mutate(x = rep(c(2.66,2.84,3,
+                   1.66,1.84,2,
+                   0.66,0.84,1), 3))
 
 p_rho <- corrplot(rhos_taxres, nobs_taxres, c("family" = "Family",
                                               "genus" = "Genus",
