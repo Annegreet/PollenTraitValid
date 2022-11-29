@@ -32,6 +32,8 @@ bdm_meta <- readRDS("RDS_files/01_Meta_data_BDM.rds")
 
 -   needs more testing
 
+-   we advocate for more testing with greater sample size
+
 ## Introduction
 
 Functional traits provide a better insight in to the processes that drive biodiversity and how biodiversity affects ecosystem functioning [@Hevia_2017]. While the functioning of modern ecosystems is regularly contingent on past human and environmental factors [@Levis_2018; @Jogiste_2017; @Blonder_2018; ], the observational duration of trait-based studies is generally at most a couple of decades [@Estes_218]. So to extend the time scales of ecosystem functioning research, considerable interest in the trait-based approach has arisen in palaeoecology [@Brussel_2018; @Blaus_2020; @Carvalho_2019; @Reitalu_2015; @Sande_2019]. Applying the trait-based approach in palaeoecological studies could offer a new way of interpreting pollen data and increase our understanding of the drivers of vegetation change on time-scales of centuries to millennia. For instance, @Sande_2019 found that on a 7000-year time scale human disturbance supersedes climate effects on plant trait composition in the Amazon.
@@ -142,24 +144,34 @@ We expected to pollen to reproduce similar trends in trait change along an eleva
 
 ## Discussion
 
-Pollen are the main proxy for reconstructing past plant composition, but the relationship between pollen assemblages and the vegetation composition is complicated. Although X-Y have showed positive relationships between pollen and vegetation composition, these are reasons why to be cautious
+Pollen are the main proxy for reconstructing past plant composition, but the relationship between pollen assemblages and the vegetation composition is complicated. Here the relationship is further complicated by throwing traits in the mix. Here we find little evidence for pollen being a reliable proxy for plant trait composition. Exploring the possible causes for the lack of a relationship between pollen CWM values and vegetation CWM values, we suggest that this either has to do with the representation of the vegetation by the pollen data (abundance, species richness) or the large trait variation within pollen types.
+
+Previous studies have showed that pollen assemblages are a reliable proxy for plant richness (@Abraham_2022, @Reitalu_2019), but these are reasons why to be cautious. Taxa can become over- or underrepresented in the pollen record because of taxon-specific differences in pollen production. Here we applied pollen productivity estimates to correct for the overproduction of certain taxa. While apply these correction factors improved the representation of the vegetation by the pollen data (supplementary), Applying this correction did not improve the relationship between pollen and vegetation trait values, however. Wind-pollinated taxa and woody taxa are generally best represented by pollen assemblages, but separating the data in to these two categories had no effect.
+
+The spatial scale that is represented by the pollen data is an important factor influencing the representativeness of pollen for vegetation reconstruction. All our treatments were assessed at three spatial scales. It seems that the intermediate scale, up to 100 m, is the most representative for the pollen data. But the relevant spatial scale is also dependent on the openness of the landscape (Bunting, ABraham).
+
+Despite here showing little evidence for pollen being a reliable proxy for past trait composition, we do not disencourage the use of it, we advocate for caution of the use., rather encaurage further testing of the validity of this proxy. And finding ways to improve it. X-Y studies have found a relationship, and looking at the confidence interval of the data we do not disproof the existence of a possitive correlation. We take into account the uncertainty around pollen trait values, but we had a very low sample size and a diverse landscape. Also moss samples vs. lake samples.
+
+the traits of species that do not show up in the dat.a
+
+
+-   
+
+-   traits of species that do not show up in the pollen record.
+
+These studies have showed
 
 -   representativeness of trait databases for trait measurements in the field?
 
     -   Sandel (2015) - trait databases are biased towards big leaved and big seeded plants
     -   Prinzing (2008) - Less lineages -- more trait variation
+    -   Sterwart (2022, preprint) - gapfilling performs well (?)
 
 -   Look for elevation studies in pollen ecology
 
 -   Being careful about apply trait based palaeoecology
 
     -   bigger sample size
-
--   Comparison between Switzerland and Scotland methods of sampling
-
-    -   vegetation surveys - all species versus max nine
-
-    -   estimation of the zones
 
 -   Interspecific trait variation in LA
 
@@ -190,6 +202,16 @@ Pollen are the main proxy for reconstructing past plant composition, but the rel
 -   Trees intercept pollen in their canopies @Jackson_1999
 
 -   pollen based trait reconstructions have been shown to correctly reflect environmental gradients as elevation (Sande) and and climatic variations (Barboni)
+
+-   exploring the reasons why we did not find correlations between pollen and vegetation values it could be:
+
+    -   low sample size
+
+    -   low pollen count (not picking up rare pollen in the vegetation) (run CWM without the species in the pollen record)
+
+    -   large trait variation in pollen
+
+    -   Is this a pollen problem or a trait problem?
 
 ## References
 
@@ -244,4 +266,16 @@ ggplot(data = bdm_meta) +
 
 ### Taxon level trait values
 
-![Estimated trait values of pollen taxa and the data](Figures/Trait_values_pollen_LA.png) ![Estimated trait values of pollen taxa and the data](Figures/Trait_values_pollen_SLA.png) ![Estimated trait values of pollen taxa and the data](Figures/Trait_values_pollen_PH.png) ![Estimated trait values of vegetation taxa and the data](Figures/Trait_values_vegetation_LA.png) ![Estimated trait values of vegetation taxa and the data](Figures/Trait_values_vegetation_SLA.png) ![Estimated trait values of vegetation taxa and the data](Figures/Trait_values_vegetation_PH.png) \### Scatterplots pollen and vegetation trait values
+![Estimated trait values of pollen taxa and the data](Figures/Trait_values_pollen_LA.png) ![Estimated trait values of pollen taxa and the data](Figures/Trait_values_pollen_SLA.png) ![Estimated trait values of pollen taxa and the data](Figures/Trait_values_pollen_PH.png) ![Estimated trait values of vegetation taxa and the data](Figures/Trait_values_vegetation_LA.png) ![Estimated trait values of vegetation taxa and the data](Figures/Trait_values_vegetation_SLA.png) ![Estimated trait values of vegetation taxa and the data](Figures/Trait_values_vegetation_PH.png)
+
+### Scatter plots pollen and vegetation trait values
+
+![](Figures/Scatter_correction.png)
+
+![](Figures/Scatter_growthform.png)
+
+![](Figures/Scatter_pollination.png)
+
+### ![](Figures/Scatter_taxonomic_resolution.png)Effect of removal of taxa on CWM trait values
+
+![](Figures/CWM_pollen_removed_taxa.png)
