@@ -11,9 +11,10 @@
 ## Email: veeken.g.a@gmail.com
 ##
 ## ---------------------------
-##
+## References: 
+## - pollen representation plot (Julier 2018, https://doi.org/10.1080/01916122.2017.1356392)
 ## Notes:
-##   - 
+##  
 ##     
 ## ---------------------------
 
@@ -75,18 +76,15 @@ zoneC <- dfABUN_bc %>%
   mutate(pollentaxon = if_else(is.na(pollentaxon), "Not in pollen data", pollentaxon)) %>% 
   # calculate species abundance on the plot level
   group_by(sitename, pollentaxon) %>% 
-  summarise(abun = sum(spec_abun_c)) %>% 
-  mutate(abun = abun/sum(abun)) %>% 
+  summarise(abun = sum(spec_abun_c, na.rm = T)) %>% 
+  mutate(abun = abun/sum(abun, na.rm = T)) %>% 
   filter(!is.nan(abun)) %>% 
   mutate(zone = "zoneC",
          country = "Scotland")
 
 veg <- bind_rows(zoneA, zoneA_swiss, zoneB, zoneC) %>% 
-  left_join(dfPOL, by = c("country","sitename","pollentaxon")) %>% 
-  filter(!is.na(abun))
+  left_join(dfPOL, by = c("country","sitename","pollentaxon")) 
 
-
-## Calculate pollen representation pot (Julier 2018, https://doi.org/10.1080/01916122.2017.1356392)
 ## Plot pollen representation per zone ----
 zone_lab <- c("Switzerland (1.8 m)", "Inner ring (10 m)", "Middle ring (100 m)", "Outer ring (1km)")
 names(zone_lab) <- c("Switzerland","zoneA", "zoneB", "zoneC")
@@ -99,18 +97,20 @@ nopol <- veg %>%
   ungroup() 
 pol_veg <- veg %>% 
   group_by(country, zone, pollentaxon) %>% 
-  summarise(veg = mean(abun,na.rm = T)*100, 
-            pol = mean(percent,na.rm = T)*100) %>% 
+  summarise(veg = mean(abun, na.rm = T)*100, 
+            pol = mean(percent, na.rm = T)*100) %>% 
+  filter(!(is.nan(veg) & is.nan(pol))) %>% 
   mutate(r_rel = pol/veg,
          r_rel_abs =  case_when(r_rel == Inf ~ "not in vegetation data",
                             is.nan(r_rel) ~ "not in pollen data")
             ) %>% 
   left_join(polmode, by = "pollentaxon") %>% 
   filter(!is.na(pollination)) 
+
    
 (p <- pol_veg %>% 
   group_by(pollentaxon) %>% 
-  filter(any(pol > 3)) %>% 
+  filter(any(pol > 2)) %>% 
   ggplot(aes(x = veg, y = pol)) +
   geom_point(aes(col = pollination)) +
   # annotations
@@ -118,8 +118,8 @@ pol_veg <- veg %>%
   geom_text_repel(aes(label = pollentaxon),
                   max.overlaps = 50, size = 3, segment.color = '#999999') +
   ggtitle("Pollen percentages") +
-  scale_x_continuous("Vegetation basal area (%)", limits = c(0,100)) +
-  scale_y_continuous("Pollen abundance (%)", limits = c(0,100)) + 
+  scale_x_continuous("Mean vegetation basal area (%)", limits = c(0,100)) +
+  scale_y_continuous("Mean pollen abundance (%)", limits = c(0,100)) + 
   scale_color_manual(name = "Pollination mode", 
                      values = c("darkorchid", "darkorange"),
                      labels = c(`not wind` = "Not wind pollinated", wind = "Wind pollinated")) +
@@ -162,8 +162,8 @@ pol_veg_draw <- veg %>%
   geom_text_repel(data = pol_veg_adj, aes(x = veg, y = pol, label = pollentaxon),
                   max.overlaps = 50, size = 3, segment.color = '#999999') +
   ggtitle("Adjusted pollen percentages") +
-  scale_x_continuous("Vegetation basal area (%)", limits = c(0,100)) +
-  scale_y_continuous("Pollen abundance (%)", limits = c(0,100)) + 
+  scale_x_continuous("Mean vegetation basal area (%)", limits = c(0,100)) +
+  scale_y_continuous("Mean pollen abundance (%)", limits = c(0,100)) + 
   scale_color_manual(name = "Pollination mode", 
                      values = c("darkorchid", "darkorange"),
                      labels = c(`not wind` = "Not wind pollinated", wind = "Wind pollinated")) +
@@ -176,24 +176,30 @@ pol_veg_draw <- veg %>%
 
 ggsave("Figures/Pollen_rep_adjustedpercent.png", p2, height = 7, width = 7)
 
+## Trait values and representation of taxa  ----
+dfTRAIT <- readRDS("RDS_files/02_Gapfilled_traits.rds")
+la <- readRDS("RDS_files/03_taxon_trait_estimates_Scotland_percent_LA.rds") 
 
-dfTRAIT <- readRDS("RDS_files/02_Gapfilled_traits_pollen.rds")
-la <- readRDS("RDS_files/check_LA_values_pollen.rds") %>% 
-  as.data.frame() %>% 
-  rownames_to_column("parameter") %>% 
-  filter(str_detect(parameter, "mean")) %>% 
-  dplyr::select(Mean, SD) %>% 
-  mutate(pollentaxon = unique(Tax)) %>%
-  mutate(across(where(is.numeric), ~exp(.)))
-r_rel <- veg %>% 
-  filter(!is.na(pollentaxon)) %>% 
-  mutate(r_rel = percent/abun,
-         r_rel_adj = adjustedpercent_mean/abun) %>% 
-  left_join(la, by = "pollentaxon") %>% 
-  filter(!country == "Switzerland") %>% 
-  mutate(repres = case_when(r_rel > 1 ~"Overrepresented in pollen",
-                            r_rel < 1 ~"Underrepresented in pollen",
-                            is.na(percent)  ~ "Underrepresented in pollen"))
+# calculate r-rel values
+r_rel <- zoneB %>%
+  full_join(dfPOL_Scot, by = c("sitename", "pollentaxon")) %>% 
+  filter(!abun == 0) %>% 
+  filter(pollentaxon == "Not in pollen data") %>% 
+  # calculate average representation 
+  group_by(pollentaxon) %>% 
+  summarise(veg = mean(abun, na.rm = T), 
+            pol = mean(percent, na.rm = T)) %>% 
+  mutate(r_rel = pol/veg) %>% 
+  mutate(repres = case_when(is.nan(r_rel)  ~ "Not in pollen data",
+                            r_rel > 1 ~ "Overrepresented in pollen",
+                            r_rel < 1 ~"Underrepresented in pollen"))
+## add taxa that are not in pollen data
+notinpollen <- dfABUN_bc %>% 
+  # join with pollen to species table
+  full_join(polspec, by = c("stand.spec" )) %>% 
+  mutate(pollentaxon = if_else(is.na(pollentaxon), "Not in pollen data", pollentaxon)) %>% 
+  filter(pollentaxon == "Not in pollen data") %>% 
+  filter(!spec_abun_b == 0)
 
 ggplot(r_rel, aes(x = repres, y = Mean)) +
   geom_boxplot() +
