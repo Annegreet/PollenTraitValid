@@ -65,19 +65,19 @@ labs_trait <- c("Height (cm)(log)",
 names(labs_trait) <- c("PlantHeight", "LA", "SLA")
 
 # Run model
-plan(multisession(workers = 4))
+plan(multisession(workers = 2))
 furrr::future_map(unique(dfPOL_Scot$pollentaxon),
                     ~cwm_pol_remove(selectedtrait = "LA",
                                 selectedcountry = "Scotland",
                                 selectedabun = "percent",
                                 removedspec = .x),
                   .options = furrr_options(seed = TRUE))
-furrr::future_map(unique(dfPOL_Scot$pollentaxon),
-                  ~cwm_pol_remove(selectedtrait = "SLA",
-                              selectedcountry = "Scotland",
-                              selectedabun = "percent",
-                              removedspec = .x),
-                  .options = furrr_options(seed = TRUE))   
+# furrr::future_map(unique(dfPOL_Scot$pollentaxon),
+#                   ~cwm_pol_remove(selectedtrait = "SLA",
+#                               selectedcountry = "Scotland",
+#                               selectedabun = "percent",
+#                               removedspec = .x),
+#                   .options = furrr_options(seed = TRUE))   
 furrr::future_map(unique(dfPOL_Scot$pollentaxon),
                   ~cwm_pol_remove(selectedtrait = "PlantHeight",
                               selectedcountry = "Scotland",
@@ -93,18 +93,30 @@ pollen_files <-
   str_subset(pattern = paste(unique(dfPOL_Scot$pollentaxon), collapse = "|")) %>% 
   str_subset(pattern = "reduced_sp", negate = T)
 
-dfCWM_pol <- pollen_files %>% 
-  purrr::map2(., str_remove(pollen_files, "RDS_files/"), ~readRDS(.x) %>% 
-                as.data.frame())  %>% 
-  bind_rows()  
+pollen_files_all <-  list.files("RDS_files/",full.names = TRUE) %>% 
+  str_subset(pattern = "03_CWM_estimates_pollen_Scotland_LA_percent.rds|03_CWM_estimates_pollen_Scotland_SLA_percent.rds|03_CWM_estimates_pollen_Scotland_PlantHeight_percent.rds")
 
-ggplot(dfCWM_pol, aes(x = Mean, y = removed_spec)) +
+dfCWM_pol <- c(pollen_files, pollen_files_all) %>% 
+  purrr::map2(., str_remove(c(pollen_files, pollen_files_all), "RDS_files/"), ~readRDS(.x) %>% 
+                as.data.frame())  %>% 
+  bind_rows()  %>% 
+  mutate(removed_spec = ifelse(is.na(removed_spec), "All species", removed_spec))
+p <- dfCWM_pol %>% 
+  filter(removed_spec %in% c("Pinus", "Betula", "Poaceae","Asteraceae",
+                             "Ericales (tetrad)", "Pteridophyte",
+                             "All species")) %>%
+  mutate(trait = factor(trait, level = c("LA", "PlantHeight", "SLA"),
+                      labels = c(LA = "Leaf~area~(mm^{2})(log)",
+                                 PlantHeight = "Height~(cm)(log)",
+                                 SLA = "SLA~(mm^{2}/mg)(log)"))) %>% 
+  ggplot(aes(x = Mean, y = removed_spec)) +
   geom_boxplot(fill = "grey") +
   ylab("") + 
   xlab("") +
-  facet_grid(~trait, labeller = labeller(trait = labs_trait)) +
+  facet_grid(~trait, labeller = label_parsed, scales = "free") +
   theme_bw()  +
   theme(legend.position = "none")
+ggsave("Figures/CWM_pollen_removed_taxa.png", height = 4, width = 7)
 
 # Vegetation ----
 plantheight <- readRDS("RDS_files/01_PlantHeight.rds") %>% 
