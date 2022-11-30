@@ -186,9 +186,9 @@ corrplot <- function(rhos, nobs, labels){
                   position = position_dodge(0.5)) +
     geom_point(shape = 21, size = 2, position = position_dodge(0.5)) +
     # labels and scales
-    scale_x_discrete("", labels = c("zoneA" = "Inner ring (0-10 m)", 
-                                    "zoneB" = "Middle ring (10-100 m)", 
-                                    "zoneC"  = "Outer ring (100-1000 m)")) +
+    scale_x_discrete("", labels = c("zoneA" = "Inner ring (10 m)", 
+                                    "zoneB" = "Middle ring (100 m)", 
+                                    "zoneC"  = "Outer ring (1000 m)")) +
     scale_y_continuous("", limits = c(-1,1)) +
     scale_fill_manual("", values = c("darkorange", "purple", "cyan4"),
                       labels = labels) +
@@ -333,7 +333,7 @@ nobs_pft <- cwm_herb %>%
   dplyr::select(label,  zone, trait, Mean, treatment = "growthform") %>% 
   ungroup() %>% 
   arrange(trait) %>% 
-  mutate(x = rep(c(2.84,1.75,2,0.75,1), 3))
+  mutate(x = rep(c(2.86,1.75,2,0.75,1), 3))
 
 p_rho <- corrplot(rhos_pft, nobs_pft, c("trsh" = "Woody", "herb" = "Non-Woody"))
 ggsave("Figures/PFT_regression.png", p_rho, width = 7, height = 3)
@@ -386,7 +386,7 @@ p_rho <- corrplot(rhos_taxres, nobs_taxres, c("family" = "Family",
                                               "genus" = "Genus",
                                               "stand.spec" = "Species"))
 
-ggsave("Figures/Taxonomic_resolution_regression.png", p_rho, width = 7, height = 3)
+ggsave("Figures/Taxonomic_resolution_regression.png", p_rho, width = 7, height = 4)
 
 ## Pollen correction + uncertainty ----
 cor_bay_draw <- function(cwm, selectedzone, selectedtrait, 
