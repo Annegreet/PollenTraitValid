@@ -120,8 +120,9 @@ Where $\alpha$ and $\beta$ are the intercept and the slope, respectively, which 
 
 ### Pollen representation by the vegetation
 - missing species in pollen 
-- 
-### Effect of spatial scale and plant functional group
+- spatial scale
+
+### Treatments
 Over all treatments and spatial scales, we only found evidence of a significant positive relationship between pollen-based reconstructed CWM trait values and vegetation CWM values for plant height. We found little support for a positive association between pollen and vegetation trait value for leaf area and specific leaf area. The spatial scale matters for the relationship between pollen plant height and vegetation plant height, only at scales between 10-100 m the relationship is significant.
 
 Although pollen productivity estimates do seem to improve the representation of the taxa in the vegetation by the pollen data (Supplementary information), it does not help to improve the pollen-vegetation trait relationships. Taking in account uncertainty around pollen productivity estimates, does XXX by between --- and ---

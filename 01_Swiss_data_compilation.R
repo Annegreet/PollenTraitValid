@@ -13,8 +13,8 @@
 ## ---------------------------
 ##
 ## Notes:
-##   - missing plot numbers
-##   - missing trait data
+##   
+##   
 ##
 ## ---------------------------
 
@@ -113,7 +113,8 @@ bdm_sp <- bdm_sp %>%
                                                    "dead wood", "dead trunk",
                                                    "stump", "fungi", "rock",
                                                    "root", "other", "bareground") ~ "No plants",
-                           str_detect(species_code, pattern = "[:digit:]") ~ "Unindentified"
+                           (str_detect(species_code, pattern = "[:digit:]") & !is.na(binom)) ~ binom,
+                           (str_detect(species_code, pattern = "[:digit:]") & is.na(binom)) ~ "Unindentified"
                                 )
          ) %>% 
   # select relevant columns, rename
