@@ -289,6 +289,7 @@ dfABUN  <- bind_rows(zoneA, zoneB, zoneC,
                      bdm_zoneA)
 
 sum_polmode <- dfABUN %>% 
+  filter(!stand.spec == "Unindentified") %>% 
   left_join(dfPFT, by = c("stand.spec" = "AccSpeciesName")) %>% 
   group_by(zone, sitename, polmode) %>% 
   # percentage of pollination type
@@ -297,6 +298,7 @@ sum_polmode <- dfABUN %>%
   pivot_wider(names_from = polmode, values_from = abun)
   
 sum <- dfABUN %>% 
+  filter(!stand.spec == "Unindentified") %>% 
   left_join(dfPFT, by = c("stand.spec" = "AccSpeciesName")) %>% 
   mutate(growthform = case_when(growthform %in% c("tree", "shrub") ~ "Woody",
                                 growthform %in% c("herb", "grass", "fern") ~ "Non-Woody")

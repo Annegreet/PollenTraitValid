@@ -3,7 +3,6 @@ output:
   word_document:
     reference_docx: "Manuscript-Markdown-template.docx"
     fig_caption: yes
-bibliography: Validation_study_references.bib
 ---
 
 ```{r setup, include=FALSE}
@@ -34,15 +33,19 @@ bdm_meta <- readRDS("RDS_files/01_Meta_data_BDM.rds")
 
 -   we advocate for more testing with greater sample size
 
+-   need to take in to account trait variation pollen types
+
 ## Introduction
 
-Functional traits provide a better insight in to the processes that drive biodiversity and how biodiversity affects ecosystem functioning [@Hevia_2017]. While the functioning of modern ecosystems is regularly contingent on past human and environmental factors [@Levis_2018; @Jogiste_2017; @Blonder_2018; ], the observational duration of trait-based studies is generally at most a couple of decades [@Estes_218]. So to extend the time scales of ecosystem functioning research, considerable interest in the trait-based approach has arisen in palaeoecology [@Brussel_2018; @Blaus_2020; @Carvalho_2019; @Reitalu_2015; @Sande_2019]. Applying the trait-based approach in palaeoecological studies could offer a new way of interpreting pollen data and increase our understanding of the drivers of vegetation change on time-scales of centuries to millennia. For instance, @Sande_2019 found that on a 7000-year time scale human disturbance supersedes climate effects on plant trait composition in the Amazon.
+Functional traits provide a better insight in to the processes that drive biodiversity and how biodiversity affects ecosystem functioning [@Hevia_2017]. While the functioning of modern ecosystems is regularly contingent on past human and environmental factors [@Levis_2018; @Jogiste_2017; @Blonder_2018], the observational duration of trait-based studies is generally at most a couple of decades [@Estes_218]. So to extend the time scales of ecosystem functioning research, considerable interest in the trait-based approach has arisen in palaeoecology [@Brussel_2018; @Blaus_2020; @Carvalho_2019; @Reitalu_2015; @Sande_2019]. Applying the trait-based approach in palaeoecological studies could offer a new way of interpreting pollen data and increase our understanding of the drivers of vegetation change on time-scales of centuries to millennia. For instance, @Sande_2019 found that on a 7000-year time scale human disturbance supersedes climate effects on plant trait composition in the Amazon.
 
 Although palaeoecological studies that have applied the trait-based approach show promising results, it is a relatively new approach of which the intricacies are under-explored. Little is known about how representative the pollen record is of past plant trait composition. Two main methodological issues arise when attempting to reconstruct functional trait composition from pollen data. First, pollen quantity does not exactly represent past plant abundance. Second, the low taxonomic resolution of the pollen record makes it not straightforward to assign traits to pollen taxa, as trait data is generally collected at the species level.
 
-Taxonomic differences in pollen dispersal and production can cause an over- or under-representation of taxa in the pollen record. Wind-pollinated and woody taxa are generally better represented in the pollen record than herbaceous and insect-pollinated taxa as their pollen are produced in larger quantities and dispersed over greater distances. The source area of a pollen of a wind-pollinated taxon can therefore be a couple magnitudes greater than that of a insect-pollinated taxon [@Meltsov_2011] (extend argument? bunting 2003, bunting 2022). Over- or under-representation can be corrected for with the use of taxon-specific pollen productivity estimates, these correction factors down-weight the contribution of dominant taxa [@Githumbi_2022]. Furthermore, it has been suggested by @Blaus_2020 to treat woody and non-woody taxa separately in the reconstruction of functional composition from pollen data as their representative pollen source area differs greatly.
+Taxonomic differences in pollen dispersal and production can cause an over- or under-representation of taxa in the pollen record. Wind-pollinated and woody taxa are generally better represented in the pollen record than herbaceous and insect-pollinated taxa as their pollen are produced in larger quantities and dispersed over greater distances. The source area of a pollen of a wind-pollinated taxon can therefore be a couple magnitudes greater than that of a insect-pollinated taxon [@Meltsov_2011] (extend argument? bunting 2003, bunting 2022). Over- or underrepresentation can be corrected for with the use of taxon-specific pollen productivity estimates, these correction factors down-weight the contribution of dominant taxa [@Githumbi_2022]. Furthermore, it has been suggested by @Blaus_2020 to treat woody and non-woody taxa separately in the reconstruction of functional composition from pollen data as their representative pollen source area differs greatly.
 
-Perhaps the most challenging in reliably reconstructing past trait composition is to attribute functional trait data to the taxa found in pollen records, as it is rarely possible to resolve the pollen record to the species level [@Birks_2020]. Trait variation within taxa can be substantial depending on the trait and the diversity of the taxon [@Albert_2010; @Prinzing_2008]. It can be expected that this is especially problematic in the case of large, abundant plant families that cannot easily be resolved to a lower taxonomic level, such as the Poaceae family. @Blaus_2020 and @Carvalho_2019 proposed that the high species number included in herbaceous pollen taxon could be one of the reasons why herbaceous vegetation was less well represented by pollen based functional diversity reconstructions. In both studies, however, traits values of pollen taxa were calculated by averaging over the available species level trait information. In this study, we use a Bayesian approach for modelling trait composition from pollen data, thereby allowing for the propagation of uncertainty in the taxon level trait reconstruction to the community level.
+The second challenge in reliably reconstructing past trait composition is to attribute functional trait data to the taxa found in pollen records, as it is rarely possible to resolve the pollen record to the species level [@Birks_2020]. Trait variation within taxa can be substantial depending on the trait and the diversity of the taxon [@Albert_2010; @Prinzing_2008]. It can be expected that this is especially problematic in the case of large, abundant plant families that cannot easily be resolved to a lower taxonomic level, such as the Poaceae family. @Blaus_2020 and @Carvalho_2019 proposed that the high species number included in herbaceous pollen taxon could be one of the reasons why herbaceous vegetation was less well represented by pollen based functional diversity reconstructions. In this study, we use a Bayesian approach for modelling trait composition from pollen data, thereby allowing for the propagation of uncertainty in the taxon level trait reconstruction to the community level.
+
+Alternative to forming a direct representation of past plant trait composition, pollen based trait reconstruction might be better suited to study relative changes in trait composition. For instance, @Sande202 showed that pollen assemblages reflect relative trait changes in trait composition of the vegetation.
 
 With this study, we aim to test the validity of using pollen records for past plant trait composition reconstruction. We address two questions. Firstly, what factors influence the pollen - vegetation trait relationship? Using a data set from the Cairngorms, Scotland, we investigate the effect of spatial scale, plant functional group, correction factors and taxonomic resolution on the representativeness of the pollen assemblages for functional trait reconstruction. Secondly, can pollen based trait reconstruction predict changes in trait composition along environmental gradients? Using pollen, vegetation and trait data collected along an elevation gradient in Switzerland we test if pollen assemblages can predict relative changes in trait composition with elevation.
 
@@ -50,11 +53,11 @@ With this study, we aim to test the validity of using pollen records for past pl
 
 ### Study sites
 
-We collected pollen, trait and species composition data from 16 sites in the Cairngorms National Park, Scotland, United Kingdom. Sites were selected to represent four vegetation types in the area: grassland, heath land, deciduous forest and coniferous forest. Sampling locations were at least 1 km from each other to avoid pollen source areas from overlapping with each other. Pollen, trait and species data was also available from `r nrow(bdm_meta)` sites across Switzerland were monitored in the context of the Biodiversity Monitoring Switzerland (BDM). This is a systematic sampling grid for the long-term monitoring of plant and animal species in Switzerland [@BDM_2022]. Trait and species composition data from an additional `r nrow(read.csv("Data/Swiss_LC/all_BDM_plots_coord.csv")) - nrow(bdm_meta)` sites that were surveyed in this network were also used in this study.
+We collected pollen, trait and species composition data from 16 sites in the Cairngorms National Park, Scotland, United Kingdom. Sites were selected to represent four vegetation types in the area: grassland, heath land, deciduous forest and coniferous forest. Sampling locations were at least 1 km from each other to avoid pollen source areas from overlapping with each other. Pollen, trait and species data was also available from `r nrow(bdm_meta)` sites across Switzerland were monitored in the context of the Biodiversity Monitoring Switzerland (BDM). This is a systematic sampling grid for the long-term monitoring of plant and animal species in Switzerland [@BDM_2022]. Trait and species composition data, but not pollen data, from an additional `r nrow(read.csv("Data/Swiss_LC/all_BDM_plots_coord.csv")) - nrow(bdm_meta)` sites that were surveyed in this network were also used in this study.
 
 ### Study design
 
-The data that was collected in Scotland was used to test if pollen-based trait reconstructions represents vegetation trait composition. We compare the community weighted mean (CWM) trait value of the vegetation with the CWM trait values reconstructed from surface pollen samples. Surface pollen samples are collected from moss polsters and approximate vegetation composition in recent years [@Birks_2016] [+Other ref?]. Study design mostly followed the protocol of @Bunting_2013, which allows for the calculation of vegetation composition in concentric circles around the moss sampling point to test the spatial scale that is represented by the moss sample (Appendix). We calculated the vegetation composition in three nested concentric rings of 10 m, 100 m and 1000 m in radius. The inner ring (10 m) and the middle ring was surveyed in the field. The vegetation cover of the outer ring (1000 m) was estimated using QGIS and land cover maps [\@scotisch_government; \@QGIS_software]. To test the effect of spatial scale on the representativeness of pollen assemblages for trait composition reconstruction, we test compare vegetation CWM and pollen CWM in the rings of 10 m, 100 m and 1000 m. Furthermore, four different treatments were assigned to test what factors could influence representation of trait composition by pollen data. Firstly, the use of correction factors, than the separation of vegetation and pollen data in to plant functional type and pollination mode. Lastly, the vegetation was aggregated to genus level and family level to test the effect of taxonomic resolution on the reconstructions.
+The data that was collected in Scotland was used to test if pollen-based trait reconstructions represents vegetation trait composition. We compare the community weighted mean (CWM) trait value of the vegetation with the CWM trait values reconstructed from surface pollen samples. Surface pollen samples are collected from moss polsters and approximate vegetation composition in recent years[@Pardoe2010]. Study design mostly followed the protocol of @Bunting_2013, which allows for the calculation of vegetation composition in concentric circles around the moss sampling point to test the spatial scale that is represented by the moss sample (Appendix). We calculated the vegetation composition in three nested concentric rings of 10 m, 100 m and 1000 m in radius. The inner ring (10 m) and the middle ring was surveyed in the field. The vegetation cover of the outer ring (1000 m) was estimated using QGIS and land cover maps [\@scotisch_government; \@QGIS_software]. To test the effect of spatial scale on the representativeness of pollen assemblages for trait composition reconstruction, we test compare vegetation CWM and pollen CWM in the rings of 10 m, 100 m and 1000 m. Furthermore, four different treatments were assigned to test what factors could influence representation of trait composition by pollen data. Firstly, the use of correction factors, than the separation of vegetation and pollen data in to plant functional type and pollination mode. Lastly, the vegetation was aggregated to genus level and family level to test the effect of taxonomic resolution on the reconstructions.
 
 To test if pollen-trait reconstructions can predict relative changes in vegetation trait composition along environmental gradients, we calculate changes in CWM trait values along an elevation gradient in Switzerland. The sites span an elevation between `r min(bdm_meta$elevation)` m and `r max(bdm_meta$elevation)`m. Of these sites `r table(bdm_meta$habitat01)[1]` were in forests and `r table(bdm_meta$habitat01)[2]` in grassland.
 
@@ -64,9 +67,9 @@ At the Scottish sites, in the inner ring (10 m) 17 sub-plots of 0.25 m^2^ were s
 
 ### Trait data collection
 
-Three traits were selected for the analysis, specific leaf area, leaf area and and plant height. These traits reflect different components in the spectrum of plant strategies. XXX. In Scotland, trait data was collected in the middle ring (100 m). For determining plant height 10 flowering of individuals were selected at every site if present, non-flowering individuals were selected if flowering individuals were not available. Five leaf samples per species for specific leaf area (SLA) and leaf area (LA) collected in seal-able plastic bags. Fresh weight and surface area were measured within 72 hours of collection using a carat scale and flatbed scanner. Samples were dried at 70 ***°***C for 72 hours to constant dry weight before measuring dry weight. In Switzerland, the trait data was collected for species present at the nine points in the 3 by 3 grid. XXXX
+We used three traits for the analysis, specific leaf area, leaf area and and plant height. These traits reflect different components in the spectrum of plant strategies [@Diaz2016]. In Scotland, trait data was collected in the middle ring (100 m). For determining plant height, we randomly selected 10 flowering individuals of each species at every site. Non-flowering individuals were selected if flowering individuals were not available. For determining specific leaf area (SLA) and leaf area (LA), we collected five leaf samples per species in sealable plastic bags. Fresh weight and surface area were measured within 72 hours of collection using a carat scale and flatbed scanner. Samples were dried at 70 ***°***C for 72 hours to constant dry weight before measuring dry weight. In Switzerland, trait data was collected for the species present at the nine points in the 3 by 3 grid, otherwise trait measurement was the same.
 
-For reconstructing trait composition from pollen data and for classifying vegetation data in to plant growth forms and pollination mode, previously gapfilled trait data from the TRY database was used [@kattge2020try] [\@Schrodt_2015]. XXX
+For reconstructing trait composition from pollen data and previously gapfilled trait data from the TRY database was used [@kattge2020try] [\@Schrodt_2015]. for classifying vegetation data in to plant growth forms and pollination mode, 
 
 ### Pollen data
 
@@ -144,7 +147,9 @@ We expected to pollen to reproduce similar trends in trait change along an eleva
 
 ## Discussion
 
-Pollen are the main proxy for reconstructing past plant composition, but the relationship between pollen assemblages and the vegetation composition is complicated. Here the relationship is further complicated by throwing traits in the mix. Here we find little evidence for pollen being a reliable proxy for plant trait composition. Exploring the possible causes for the lack of a relationship between pollen CWM values and vegetation CWM values, we suggest that this either has to do with the representation of the vegetation by the pollen data (abundance, species richness) or the large trait variation within pollen types.
+Pollen assemblages are the main proxy for studying past vegetation features, and are a reliable proxy for plant species richness and XX. However the relationship with vegetation trait composition is complex. Here we find little evidence for pollen being a reliable proxy for plant trait composition.but the relationship between pollen assemblages and the vegetation composition is complex Exploring the possible causes for the lack of a relationship between pollen CWM values and vegetation CWM values, we suggest that this either has to do with the representation of the vegetation by the pollen data (abundance, species richness) or the large trait variation within pollen types.
+ 
+vegetation structure (Switzerland) and scale (Scotland)
 
 Previous studies have showed that pollen assemblages are a reliable proxy for plant richness (@Abraham_2022, @Reitalu_2019), but these are reasons why to be cautious. Taxa can become over- or underrepresented in the pollen record because of taxon-specific differences in pollen production. Here we applied pollen productivity estimates to correct for the overproduction of certain taxa. While apply these correction factors improved the representation of the vegetation by the pollen data (supplementary), Applying this correction did not improve the relationship between pollen and vegetation trait values, however. Wind-pollinated taxa and woody taxa are generally best represented by pollen assemblages, but separating the data in to these two categories had no effect.
 
@@ -154,8 +159,10 @@ Despite here showing little evidence for pollen being a reliable proxy for past 
 
 the traits of species that do not show up in the dat.a
 
+## Conclusion
+Characterizing the factors that influence the relationship between vegetation trait composition and , and validating the relationship between trait composition of the vegetation and is an important step towards the application of traits in palaeoecology.
 
--   
+-   swiss - grass land receiving input from forests
 
 -   traits of species that do not show up in the pollen record.
 
@@ -219,7 +226,11 @@ These studies have showed
 
 ## Appendix
 
-### Pollen representation
+## Pollen percentages
+
+![Pollen percentage of the most abundant (\> 5%) taxa in Scotland. The effect of the application of pollen productivity estimates to the representation of pollen taxa is shown by the coloured bars. ![Pollen percentage of the most abundant (\> 5%) taxa in Switzerland. Sites are sorted in order of increasing elevation (top to bottom). The effect of the application of pollen productivity estimates to the representation of pollen taxa is shown by the coloured bars.](Figures/Pollen_percentage_swiss.png)](Figures/Pollen_percentage_scotland.png)
+
+## Pollen representation
 
 ![Scatter plot of vegetation basal area % against pollen abundance %. Coloured dots represent either wind or non-wind pollinated taxa.](Figures/Pollen_rep_percent.png)
 
@@ -276,6 +287,8 @@ ggplot(data = bdm_meta) +
 
 ![](Figures/Scatter_pollination.png)
 
-### ![](Figures/Scatter_taxonomic_resolution.png)Effect of removal of taxa on CWM trait values
+### ![](Figures/Scatter_taxonomic_resolution.png)
+
+### Effect of removal of taxa on CWM trait values
 
 ![](Figures/CWM_pollen_removed_taxa.png)
