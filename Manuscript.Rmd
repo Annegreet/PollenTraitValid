@@ -64,34 +64,31 @@ To test if pollen-trait reconstructions can predict relative changes in vegetati
 At the Scottish sites, we surveyed 17 sub-plots of 0.25 m^2^ in the inner ring (10 m): one in the center, 3 in every wind direction at 3, 6 and 10 meters, and one in the NE, NW, SE and SW direction (See design in Appendix). In the middle ring (10-100 m), we selected between 4 and 6 plots of 5 by 5 meter based on a stratified random design based on vegetation types that were identified in the fields. Vegetation abundance was estimated using percentage cover. In Switzerland, the plots were 1.8 m in radius and contained 4 sub-plots. Each sub-plot was a quadrant of 0.16 m^2^ with nine points (a 3 x 3 grid), and percentage coverage of the species present at the nine points was estimated. All species names were standardized according to the Leipzig Plant Catalogue using the *lcvplants* and *lcvp* R packages [@freiberg2020lcvp].
 
 ### Trait data collection
-We used three traits for the analysis, specific leaf area, leaf area and and plant height. These traits reflect different components in the spectrum of plant strategies [@Diaz2016]. In Scotland, we collected trait data in the middle ring (100 m). For determining plant height, we randomly selected 10 flowering individuals of each species at every site. Non-flowering individuals were selected if flowering individuals were not available. For determining specific leaf area (SLA) and leaf area (LA), we collected five leaf samples per species in sealable plastic bags. Fresh weight and surface area were measured within 72 hours of collection using a carat scale and flatbed scanner. Samples were dried at 70 ***°***C for 72 hours to constant dry weight before measuring dry weight. In Switzerland, trait data was collected for the species present at the nine points in the 3 by 3 grid, otherwise trait measurement was the same.For reconstructing trait composition from pollen data and previously gapfilled trait data from the TRY database was used [@kattge2020try] [@Schrodt_2015]. 
+We used three traits for the analysis, specific leaf area (SLA), leaf area (LA) and and plant height. These traits reflect different components in the spectrum of plant strategies [@Diaz2016]. In Scotland, we collected trait data in the middle ring (100 m). For determining plant height, we randomly selected 10 flowering individuals of each species at every site. Non-flowering individuals were selected if flowering individuals were not available. For determining specific leaf area and leaf area, we collected five leaf samples per species in sealable plastic bags. Fresh weight and surface area were measured within 72 hours of collection using a carat scale and flatbed scanner. Samples were dried at 70 ***°***C for 72 hours to constant dry weight before measuring dry weight. In Switzerland, trait data was collected for the species present at the nine points in the 3 by 3 grid, otherwise trait measurement was the same. For reconstructing trait composition from pollen data, we did not use the data collected in the field but previously gapfilled trait data from the TRY database was used [@kattge2020try] [@Schrodt_2015]. 
 
-### Pollen data
+### Pollen data collection
 Surface pollen samples are collected from moss polsters and approximate vegetation composition in recent years [@Pardoe2010]. Moss was collected from multiple location within a 1 m radius in the center of each plot.Pollen were extracted from the moss using standardized pollen preparation protocol (REF). Pollen were identified using light microscope and the key of (REF). 
 
-
-### 
-To test the ability of pollen correction factors to improve pollen - vegetation relationships, pollen productivity estimates from @Githumbi_2022 were used.Pollen productivity estimates were not available for all taxa, taxa without pollen productivity factors were excluded. On average, this led to the exclusion of `r round(mean(missing_ppe_scot$percent_missing),2)*100`% of the Scottish pollen data (max `r round(max(missing_ppe_scot$percent_missing),2)*100`%). Pollen were divided in to two plant functional groups according to @Reitalu_2019 consisting of woody (trees and shrubs) or non-woody species (grasses, herbs and dwarf shrubs of the Ericaceae family). @Reitalu_2019 was also used to classify pollen in to pollination mode, either insect-pollinated or not insect-pollinated.
-
-For reconstructing plant trait composition from pollen data, assumptions needed to be made about the species belonging to the pollen taxa in the data set. Therefore we created a pollen to species translation table. We used the *rgbif* package to download the current distribution of species belonging to each pollen taxon in Scotland and Switzerland from the Global Biodiversity Information Facility database (REF). Species distribution data was queried using the pollen taxonomic name, i.e. the lowest taxonomic name the pollen could be identified to. All trait data that was available for the species in the translation table was then used in the calculation trait values on the pollen taxonomic level. For reconstructing trait composition from pollen data and previously gapfilled trait data from the TRY database was used [@kattge2020try] [@Schrodt_2015]. 
+For reconstructing plant trait composition from pollen data, assumptions need to be made about the species belonging to the pollen taxa in the data set. Therefore we created a pollen to species translation table. We used the *rgbif* package to download the current distribution of species belonging to each pollen taxon in Scotland and Switzerland from the Global Biodiversity Information Facility database (REF). Species distribution data was queried using the pollen taxonomic name, i.e. the lowest taxonomic name the pollen could be identified to. All trait data that was available for the species in the translation table was then used in the calculation trait values on the pollen taxonomic level.
 
 ### Calculation of community weighted mean
-
-We use the community weighted mean (CWM) to characterize functional composition, which here is specified as the trait distribution of a taxon, i.e. the species in the vegetation data and the pollen taxon in the pollen data, weighted by its abundance. First, the trait distribution on the species or the pollen taxonomic level was estimated. We assume that the trait data of SLA, LA and plant height follow a lognormal distribution for the likelihood, so that$$trait_{i}^{observed} \sim { lognormal(\mu_{j},\sigma_j)}$$Where *i* represents each trait observation of a taxon (*j*) from the trait data. $\mu_{j}$ and $\sigma_{j}$ are the mean trait value and the standard deviation per taxon, respectively. Vague priors were used for the taxon mean and standard deviation estimation. We then modelled the community weighted mean (CWM) as a mixture of normal distributions that were weighted by the species abundance or pollen percentage, so that
+We use the community weighted mean (CWM) to characterize functional composition. Here CWM is specified as the trait distribution of a taxon, i.e. the species in the vegetation data and the pollen taxon in the pollen data, weighted by its abundance. First, the trait distribution on the species or the pollen taxonomic level was estimated. We assume that the trait data of SLA, LA and plant height follow a lognormal distribution for the likelihood, so that
+$$trait_{i}^{observed} \sim { lognormal(\mu_{j},\sigma_j)}$$
+Where *i* represents each trait observation of a taxon (*j*) from the trait data. $\mu_{j}$ and $\sigma_{j}$ are the mean trait value and the standard deviation per taxon, respectively. Vague priors were used for the taxon mean and standard deviation estimation. We then modeled the CWM as a mixture of normal distributions that were weighted by the species abundance or pollen percentage, so that
 
 $$
 CWM_{s} \sim \sum^{n}\pi_{j}Normal(\mu_{j},\sigma_{j})
 $$
 
-Where *n* is the total number of taxa, and $\pi_{j}$ the abundance of each pollen taxon or species at a given site *s*. The mean ($CWM_{mean}$) and the standard deviation ($CWM_{sd}$)of this modelled distribution was subsequently used in the estimation of the correlation between the trait composition of the vegetation and the pollen data.
+Where *n* is the total number of taxa, and $\pi_{j}$ the abundance of each pollen taxon or species at a given site *s*. The mean ($CWM_{mean}$) and the standard deviation ($CWM_{sd}$) of this modeled distribution was subsequently used in the estimation of the correlation between the trait composition of the vegetation and the pollen data.
 
 ### Relationship between pollen and vegetation community weighted mean
-
 To test the relationship between the pollen based reconstruction of CWM and the vegetation CWM, we standardized the CWM values and fitted a students-t distributed likelihood for pollen CWM ($CWM_{mean}^{pol}$) with vegetation CWM ($CWM_{mean}^{veg}$) as the single predictor so that,
 
 $$  CWM_{mean}^{pol} \sim t(\beta_{t} CWM_{mean}^{veg},CWM_{sd}^{pol},df) $$
 
-The slope $\beta_{t}$ is a correlation-like metric defined with a flat, uninformative prior. $$
+The slope $\beta_{t}$ is a correlation-like metric defined with a flat, uninformative prior. 
+$$
 \beta \sim Uniform(-1,1)
 $$
 
@@ -105,11 +102,15 @@ $$
 \lambda = 1/30
 $$
 
-We ran this model for every trait and zone in Scotland, and for the following different treatments: the use of correction factors, sub-setting the data in plant functional type, sub-setting the data in pollination mode and modelling on different taxonomic resolutions
+### Treatments 
+To test the ability of pollen correction factors to improve pollen - vegetation relationships, we divided pollen counts by pollen productivity estimates. We used pollen productivity estimates (ppe's) from @Githumbi_2022 who provides ppe's and uncertainty estimates for 39 taxa in Europe. Pollen productivity estimates were not available for all taxa in the pollen data, taxa without pollen productivity factors were excluded. On average, this led to the exclusion of `r round(mean(missing_ppe_scot$percent_missing),2)*100`% of the Scottish pollen data (max `r round(max(missing_ppe_scot$percent_missing),2)*100`%). 
+
+To test for differences in the representation of particular plant functional groups by pollen assemblages, pollen were divided in to plant functional groups. We used the classification of @Reitalu_2019 who distinguished between woody (trees and shrubs) and non-woody species (grasses, herbs and dwarf shrubs of the Ericaceae family). @Reitalu_2019 was also used to classify pollen in to pollination mode, either insect-pollinated or not insect-pollinated. To classify the vegetation in to plant functional groups and pollination mode, data from the TRY database was used [@kattge2020try].
+
+To test for the effect of taxonomic resolution on the trait reconstructions, we calculated CWM trait values of the vegetation using all available trait data of the species, genus or family. 
 
 ### Community weighted mean changes with elevation
-
-To test if trait compositional changes of the vegetation along an elevation gradient are reflected by pollen based trait reconstructions, we fitted a generalized linear model with elevation as the predictor, so that the likelihood of the CWM value is defined as follows,
+To test if trait composition changes of the vegetation along an elevation gradient are reflected by pollen based trait reconstructions, we fitted a generalized linear model with elevation as the predictor, so that the likelihood of the CWM value is defined as follows,
 
 $$CWM^{mean} \sim t(\alpha + \beta Y_{elev}, CWM^{sd},df)$$
 
