@@ -19,10 +19,10 @@
 
 options(scipen = 999)
 set.seed(1)
+
 ## Load packages
 if (!require(tidyverse)) install.packages("tidyverse")
 if (!require(readxl)) install.packages("readxl")
-
 
 # Scotland ----
 pollen_raw <- read.csv("Data/Pollen_count_Scotland-checked.csv", skip = 1, sep = ";")
@@ -46,8 +46,6 @@ dfPOL <- pollen_raw %>%
          count = as.numeric(count)) %>% 
   # remove zeros
   filter(!count == 0) %>% 
-  mutate(pollentaxon = recode(pollentaxon, Tsuga = "unindentified", 
-                              Liliaceae = "unindentified", Drosera = "unindentified")) %>%  # probably misidentified
   #correct pollen taxon names
   mutate(pollentaxon = 
            # remove "-type" to facilitate GBIF search
@@ -75,7 +73,9 @@ dfPOL_nc <- dfPOL %>%
   group_by(sitename) %>% 
   mutate(percent = count/sum(count, na.rm = TRUE)) %>%
   group_by(sitename, pollentaxon) %>%
-  summarise(percent = sum(percent)) 
+  summarise(percent = sum(percent)) %>% 
+  # Helinger transformation
+  mutate(adjusted_helinger = sqrt(percent))
 
 # make function to continue draw from rnorm till RPP is positive (otherwise negative percentages)
 norm_positive <- function(RPP, RPP_sd){
@@ -97,7 +97,7 @@ dfPOL_cor <- dfPOL %>%
   mutate(mean = count/RPP) %>%  
   # correction with random draw from RPP distribution
   rowwise() %>%
-  mutate(col_rnorm = list(setNames(count/replicate(n,norm_positive(RPP, RPP_sd)), paste0("draw",1:n)))) %>%
+  mutate(col_rnorm = list(setNames(count/replicate(n, norm_positive(RPP, RPP_sd)), paste0("draw",1:n)))) %>%
   unnest_wider(col_rnorm) %>% 
   # calculate percentages
   group_by(sitename) %>% 
@@ -124,8 +124,6 @@ dfPOL <- read.csv("Data/Pollen_count_Switserland-checked.csv", skip = 1, sep = "
                values_to = "count") %>%
   mutate(count = as.numeric(count)) %>% # change variable types
   dplyr::select(sitename, pollentaxon = Sample.name, count) %>%  # select relevant rows
-  mutate(pollentaxon = recode(pollentaxon, Tsuga = "unindentified", 
-         Liliaceae = "unindentified", Drosera = "unindentified")) %>%  # probably misidentified
   # remove zeros
   filter(!count == 0) %>% 
   # filter out unidentified
@@ -137,7 +135,8 @@ dfPOL <- read.csv("Data/Pollen_count_Switserland-checked.csv", skip = 1, sep = "
            # Typos
            recode(Caryophyllaccea = "Caryophyllaceae")
   ) %>% 
-  mutate(sitename = recode(sitename, "X563186" = "X563166" )) # miss named site
+  mutate(sitename = recode(sitename, "X563186" = "X563166" )) %>% # miss named site
+  filter(!sitename == "unknown")  # unknown site
 
 # percentage data with missing ppe's 
 missing_ppe_swiss <- dfPOL %>%
@@ -154,7 +153,9 @@ dfPOL_nc <- dfPOL %>%
   group_by(sitename) %>% 
   mutate(percent = count/sum(count, na.rm = TRUE)) %>%
   group_by(sitename, pollentaxon) %>%
-  summarise(percent = sum(percent)) 
+  summarise(percent = sum(percent)) %>% 
+  # Helinger transformation
+  mutate(adjusted_helinger = sqrt(percent))
 
 dfPOL_cor <- dfPOL %>%
   # join with ppe data 
@@ -165,7 +166,7 @@ dfPOL_cor <- dfPOL %>%
   mutate(mean = count/RPP) %>%  
   # correction with random draw from RPP distribution
   rowwise() %>%
-  mutate(col_rnorm = list(setNames(count/replicate(n,norm_positive(RPP, RPP_sd)), paste0("draw",1:n)))) %>%
+  mutate(col_rnorm = list(setNames(count/replicate(n, norm_positive(RPP, RPP_sd)), paste0("draw",1:n)))) %>%
   unnest_wider(col_rnorm) %>% 
   # calculate percentages
   group_by(sitename) %>% 
