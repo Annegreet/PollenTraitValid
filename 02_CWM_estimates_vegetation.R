@@ -19,14 +19,13 @@
 
 set.seed(1)
 
-
 ## Load packages
 if (!require(tidyverse)) install.packages("tidyverse")
 if (!require(rjags))  install.packages("rjags")
 if (!require(runjags)) install.packages("runjags")
 if (!require(mcmc)) install.packages("mcmc")
 if (!require(coda)) install.packages("coda")
-if (!require(furrr))  install.packages("furrr")
+if (!require(furrr)) install.packages("furrr")
 
 ## Load functions
 source("cwm_functions.R")
@@ -36,8 +35,6 @@ source("cwm_functions.R")
 # Scotland ----
 plantheight <- readRDS("RDS_files/01_PlantHeight.rds") %>% 
   ungroup() 
-ldmc <- readRDS("RDS_files/01_LDMC.rds") %>% 
-  ungroup()
 sla <- readRDS("RDS_files/01_SLA.rds") %>% 
   ungroup()
 la <- readRDS("RDS_files/01_LA.rds") %>% 
@@ -45,18 +42,18 @@ la <- readRDS("RDS_files/01_LA.rds") %>%
 
 
 lTrait <- list(PlantHeight = plantheight,
-               LDMC = ldmc,
                SLA = sla,
                LA = la)
 
 dfTRY_raw <- readRDS("RDS_files/02_Gapfilled_traits.rds")
 
 # Pollination and PFT ----
-dfPFT <- readRDS("RDS_files/Polmode_pft_vegetation.rds")
+dfPFT <- readRDS("RDS_files/01_Polmode_pft_vegetation.rds")
 
 # Species to pollen table
 polspec <- readRDS("RDS_files/02_PollenType_species.rds") %>% 
-  dplyr::select(pollentaxon, stand.spec) %>% distinct() %>% as_tibble()
+  dplyr::select(pollentaxon, stand.spec) %>% distinct() %>% as_tibble() %>% 
+  drop_na()
 
 # Species abundance data ----
 dfABUN_a <- readRDS("RDS_files/01_Species_abundance_a.rds") 
@@ -94,10 +91,10 @@ lABUN <- list("zoneA" = zoneA, "zoneB" = zoneB, "zoneC" = zoneC)
 
 trsh <- c("tree", "shrub")
 herb <- c("herb", "grass", "fern")
-allpft  <- c("tree","herb","grass","fern","shrub", NA)
+allpft  <- c("tree","herb","grass","fern","shrub")
 wind <- "wind"
 nowind <- "not wind"
-allpol <- c("wind", "not wind", NA)
+allpol <- c("wind", "not wind")
 
 # Create joining column for trait data (to allow match for taxa 
 # that are not identified to species level)
@@ -118,7 +115,8 @@ dfTRY <-
   mutate(., stand.spec = case_when(stand.spec %in% veg_sp ~ stand.spec,
                                    genus %in% veg_sp ~ genus,
                                    family %in% veg_sp ~ family)
-                        )
+                        ) %>% 
+  drop_na()
              
 selectedtrait <- "LA"
 selectedabun <- "zoneB"
@@ -129,76 +127,70 @@ notinpollen <- FALSE
 
 scottraits <- c("PlantHeight", "LA", "SLA")
 
-# set number of cores to use
-if (Sys.info()[4] == "LUIN67311") {
-  plan(multisession, workers = 1)
-} else {
-  plan(multisession, workers = 6)
-}
-
+plan(multisession, workers = 3)
 # Scotland----
-if (0) { 
+if (1) { 
 # Zone A ----
 # all
- furrr::future_map(scottraits,
-                   ~cwm_veg_scot(selectedabun = "zoneA",
-                             selectedtrait = .,
-                             selectedtaxres = "stand.spec",
-                             selectedpolmode = allpol,
-                             selectedpft = allpft),
-                   .options = furrr_options(seed = TRUE))
- # only taxa in pollen data
- furrr::future_map(scottraits,
-                   ~cwm_veg_scot(selectedabun = "zoneA",
-                             selectedtrait = .,
-                             selectedtaxres = "stand.spec",
-                             selectedpolmode = allpol,
-                             selectedpft = allpft,
-                             notinpollen = TRUE),
-                   .options = furrr_options(seed = TRUE))
- # pollination
- furrr::future_map(scottraits,
-                   ~cwm_veg_scot(selectedabun = "zoneA",
-                             selectedtrait = .,
-                             selectedtaxres = "stand.spec",
-                             selectedpolmode = nowind,
-                             selectedpft = allpft),
-                   .options = furrr_options(seed = TRUE))
- furrr::future_map(scottraits,
-                   ~cwm_veg_scot(selectedabun = "zoneA",
-                             selectedtrait = .,
-                             selectedtaxres = "stand.spec",
-                             selectedpolmode = wind,
-                             selectedpft = allpft),
-                   .options = furrr_options(seed = TRUE))
+ # furrr::future_map(scottraits,
+ #                   ~cwm_veg_scot(selectedabun = "zoneA",
+ #                             selectedtrait = .,
+ #                             selectedtaxres = "stand.spec",
+ #                             selectedpolmode = allpol,
+ #                             selectedpft = allpft),
+ #                   .options = furrr_options(seed = TRUE))
+ # # only taxa in pollen data
+ # furrr::future_map(scottraits,
+ #                   ~cwm_veg_scot(selectedabun = "zoneA",
+ #                             selectedtrait = .,
+ #                             selectedtaxres = "stand.spec",
+ #                             selectedpolmode = allpol,
+ #                             selectedpft = allpft,
+ #                             notinpollen = TRUE),
+ #                   .options = furrr_options(seed = TRUE))
+ # # pollination
+ # furrr::future_map(scottraits,
+ #                   ~cwm_veg_scot(selectedabun = "zoneA",
+ #                             selectedtrait = .,
+ #                             selectedtaxres = "stand.spec",
+ #                             selectedpolmode = nowind,
+ #                             selectedpft = allpft),
+ #                   .options = furrr_options(seed = TRUE))
+ # furrr::future_map(scottraits,
+ #                   ~cwm_veg_scot(selectedabun = "zoneA",
+ #                             selectedtrait = .,
+ #                             selectedtaxres = "stand.spec",
+ #                             selectedpolmode = wind,
+ #                             selectedpft = allpft),
+ #                   .options = furrr_options(seed = TRUE))
+ # 
+ # # growth form
+ # # barely trees in zone A -> only do herbs
+ # furrr::future_map(scottraits,
+ #                   ~cwm_veg_scot(selectedabun = "zoneA",
+ #                             selectedtrait = .,
+ #                             selectedtaxres = "stand.spec",
+ #                             selectedpolmode = allpol,
+ #                             selectedpft = herb
+ #                             ),
+ #                   .options = furrr_options(seed = TRUE))
+ # # Taxonomic resolution
+ # furrr::future_map(scottraits,
+ #                   ~cwm_veg_scot(selectedabun = "zoneA",
+ #                             selectedtrait = .,
+ #                             selectedtaxres = "genus",
+ #                             selectedpolmode = allpol,
+ #                             selectedpft = allpft),
+ #                   .options = furrr_options(seed = TRUE))
+ # furrr::future_map(scottraits,
+ #                   ~cwm_veg_scot(selectedabun = "zoneA",
+ #                             selectedtrait = .,
+ #                             selectedtaxres = "family",
+ #                             selectedpolmode = allpol,
+ #                             selectedpft = allpft),
+ #                   .options = furrr_options(seed = TRUE))
 
- # growth form
- # barely trees in zone A -> only do herbs
- furrr::future_map(scottraits,
-                   ~cwm_veg_scot(selectedabun = "zoneA",
-                             selectedtrait = .,
-                             selectedtaxres = "stand.spec",
-                             selectedpolmode = allpol,
-                             selectedpft = herb
-                             ),
-                   .options = furrr_options(seed = TRUE))
- # Taxonomic resolution
- furrr::future_map(scottraits,
-                   ~cwm_veg_scot(selectedabun = "zoneA",
-                             selectedtrait = .,
-                             selectedtaxres = "genus",
-                             selectedpolmode = allpol,
-                             selectedpft = allpft),
-                   .options = furrr_options(seed = TRUE))
- furrr::future_map(scottraits,
-                   ~cwm_veg_scot(selectedabun = "zoneA",
-                             selectedtrait = .,
-                             selectedtaxres = "family",
-                             selectedpolmode = allpol,
-                             selectedpft = allpft),
-                   .options = furrr_options(seed = TRUE))
-
- ## Zone B ----
+# Zone B ----
  # all
  furrr::future_map(scottraits,
                    ~cwm_veg_scot(selectedabun = "zoneB",
@@ -264,8 +256,8 @@ if (0) {
                              selectedpft = allpft),
                    .options = furrr_options(seed = TRUE))
 # Zone C ----
- all
- furrr::future_map(scottraits[-3],
+ # all
+ furrr::future_map(scottraits,
                    ~cwm_veg_scot(selectedabun = "zoneC",
                              selectedtrait = .,
                              selectedtaxres = "stand.spec",
@@ -281,7 +273,7 @@ if (0) {
                              selectedpft = allpft,
                              notinpollen = TRUE),
                    .options = furrr_options(seed = TRUE))
- pollination
+ # pollination
  furrr::future_map(scottraits,
                    ~cwm_veg_scot(selectedabun = "zoneC",
                              selectedtrait = .,
@@ -335,16 +327,15 @@ if (1) {
   # Load data
   bdm_traits <- readRDS("RDS_files/01_Traits_Swiss.rds") %>% 
     # trees over 200 cm not sampled for traits, use TRY data instead
-    filter(!PFT == "TR")
-  bdm_abun <- readRDS("RDS_files/01_Species_abundance_Swiss.rds") 
+    filter(!PFT == "TR") %>% 
+    filter(!stand.spec == "Unindentified") %>% 
+    mutate(stand.spec = str_remove(stand.spec, pattern = " sp\\."))
+  bdm_abun <- readRDS("RDS_files/01_Species_abundance_Swiss.rds") %>% 
+    mutate(stand.spec = str_remove(stand.spec, pattern = " sp\\."))
 
-  dfPFT <- readRDS("RDS_files/Polmode_pft_vegetation.rds")
-  
   zoneA <- bdm_abun %>%
     arrange(sitename, stand.spec) %>% 
-    # join with pft and polmode data
-    left_join(dfPFT, 
-              by = c("stand.spec" = "AccSpeciesName")) %>% 
+    filter(!stand.spec == "Unindentified") %>% 
     ungroup 
  
   lABUN <- list("zoneA" = zoneA)
@@ -352,18 +343,18 @@ if (1) {
   # match taxon names abundance data with trait data
   veg_sp <- lABUN %>% 
     purrr::map(., ~pull(.,stand.spec)) %>% 
-    unlist %>% unique
+    unlist %>% unique 
   bdm_traits <- bdm_traits %>% 
     mutate(., stand.spec =
              case_when(stand.spec %in% veg_sp ~ stand.spec,
                                       genus %in% veg_sp ~ genus,
-                                      family %in% veg_sp ~ family)
-    ) 
+                                      family %in% veg_sp ~ family)) 
   dfTRY <- readRDS("RDS_files/02_Gapfilled_traits.rds") %>% 
     mutate(., stand.spec = case_when(stand.spec %in% veg_sp ~ stand.spec,
                                      genus %in% veg_sp ~ genus,
                                      family %in% veg_sp ~ family)
-    )
+    ) %>% 
+    drop_na()
   
 
 
