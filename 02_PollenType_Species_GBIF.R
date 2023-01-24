@@ -25,6 +25,7 @@
 ## Load packages
 if (!require(tidyverse)) install.packages("tidyverse")
 if (!require(rgbif)) install.packages("rgbif")
+if (!require(devtools)) install.packages("devtools")
 if (!require(LCVP)) devtools::install_github("idiv-biodiversity/LCVP")
 if (!require(lcvplants)) devtools::install_github("idiv-biodiversity/lcvplants")
 
