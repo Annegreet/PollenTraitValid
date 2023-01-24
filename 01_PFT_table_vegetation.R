@@ -79,7 +79,9 @@ pft <- traits %>%
   filter(!(AccSpeciesName == "Dryopteris" & growthform == "herb")) %>% 
   filter(!(AccSpeciesName == "Empetrum nigrum" & growthform == "shrub")) %>% 
   filter(!(AccSpeciesName == "Equisetum sylvaticum" & growthform == "shrub")) %>% 
+  filter(!(AccSpeciesName == "Equisetum" & growthform == "fern")) %>% 
   filter(!(AccSpeciesName == "Galium rotundifolium" & growthform == "shrub")) %>% 
+  filter(!(AccSpeciesName == "Holcus lanatus" & growthform == "herb")) %>% 
   filter(!(AccSpeciesName == "Equisetum sylvaticum" & growthform == "herb")) %>% 
   filter(!(AccSpeciesName == "Juncus bufonius" & growthform == "tree")) %>% 
   filter(!(AccSpeciesName == "Juniperus communis" & growthform == "tree")) %>% 
@@ -88,6 +90,7 @@ pft <- traits %>%
   filter(!(str_detect(AccSpeciesName,"Luzula") & growthform == "shrub")) %>% 
   filter(!(AccSpeciesName == "Luzula multiflora" & growthform == "herb")) %>% 
   filter(!(AccSpeciesName == "Milium effusum" & growthform == "herb")) %>% 
+  filter(!(AccSpeciesName == "Molinia caerulea" & growthform == "herb")) %>% 
   filter(!(AccSpeciesName == "Nardus stricta" & growthform == "herb")) %>% 
   filter(!(AccSpeciesName == "Orthilia secunda" & growthform == "shrub")) %>% 
   filter(!(str_detect(AccSpeciesName, "Plantago") & growthform == "tree")) %>% 
@@ -101,6 +104,7 @@ pft <- traits %>%
   filter(!(str_detect(AccSpeciesName, "Rumex") & growthform == "tree")) %>% 
   filter(!(AccSpeciesName == "Stellaria media" & growthform == "tree")) %>% 
   filter(!(AccSpeciesName == "Stellaria media" & growthform == "shrub")) %>% 
+  filter(!(AccSpeciesName == "Salix" & growthform == "tree")) %>% 
   filter(!(AccSpeciesName == "Trichophorum cespitosum" & growthform == "herb")) %>% 
   filter(!(AccSpeciesName == "Trifolium repens" & growthform == "tree")) %>% 
   filter(!(AccSpeciesName == "Urtica dioica" & growthform == "shrub")) %>% 
@@ -118,7 +122,7 @@ pft <- traits %>%
                              "Jacobaea vulgaris","Trichophorum caespitosum",
                              "Trientalis europaea","Salix",
                              "Taraxacum","Primula acaulis",
-                             "Equisetum","Hypochaeris",
+                             "Hypochaeris",
                              "Myosotis","Cirsium",
                              "Equisetum sylvaticum","Glyceria fluitans",
                              "Lonicera nigra","Unindentified",
@@ -155,7 +159,7 @@ pft <- traits %>%
                              "Ulmus glabra","Ulmus procera"), 
           growthform = c("grass","grass", "grass", "grass", "herb",
                          "grass","herb", "shrub", "herb", "herb",
-                         "fern", "herb", "herb", "herb", "fern",
+                          "herb", "herb", "herb", "fern",
                          "grass", "shrub", NA, "shrub", "herb",
                          "herb","herb","herb","herb","herb",
                          "herb","herb","grass","herb","herb",
@@ -223,18 +227,7 @@ polmode <- traits %>%
                              "Juncus bufonius", "Larix decidua", "Lathyrus palustris",
                              "Potentilla brevifolia","Carex curvula", "Lycopodium annotinum",
                              "Trifolium alpinum",
-                             "Blechnum spicant","Sambucus nigra" ,"Abies grandis",  "Abies procera", 
-                             "Acer campestre"  , "Aesculus hippocastanum", "Alnus glutinosa","Alnus incana",
-                             "Betula pubescens", "Betula", "Botrychium lunaria",  "Carpinus betulus",
-                             "Castanea sativa", "Chamaecyparis lawsoniana", "Crataegus monogyna", "Cryptomeria japonica",
-                             "Cupressus", "Ilex aquifolium", "Larix kaempferi","Malus sylvestris",
-                             "Nothofagus", "Picea omorika", "Picea sitchensis", "Pinus contorta",
-                             "Pinus nigra", "Pinus", "Populus", "Populus tremula",
-                             "Prunus avium"   , "Prunus padus"  , "Pseudotsuga menziesii",
-                             "Quercus robur","Quercus rubra", "Quercus", "Salix caprea",
-                             "Salix cinerea","Sequoia sempervirens", "Sorbus aria", "Sorbus torminalis",
-                             "Taxus baccata","Thuja plicata", "Tilia", "Tsuga heterophylla",
-                             "Ulmus glabra","Ulmus procera"),
+                             "Blechnum spicant"),
           polmode = c("wind","wind", "wind", "wind", "not wind",
                       "wind","not wind", "wind", "not wind", "not wind",
                       "wind", "not wind", "not wind", "not wind", "wind",
@@ -244,71 +237,40 @@ polmode <- traits %>%
                       "not wind","not wind","not wind","not wind","not wind",
                       "not wind", "not wind","wind","wind","wind", "wind",
                       "wind", "not wind", "not wind", "wind", "wind","not wind",
-                      "wind","wind","not wind","not wind","wind","wind","wind",
-                      "wind","wind","wind","wind","wind","wind","not wind","wind",
-                      "wind","not wind","wind","not wind","wind","wind","wind",
-                      "wind","wind","wind","wind","wind","not wind","not wind",
-                      "wind","wind","wind","wind","not wind","not wind","not wind",
-                      "wind","not wind","not wind","wind","wind","not wind","wind",
-                      "not wind","not wind"
-          )) %>% 
-  # Ericaceae specified as non wind pollinated in pollen data
+                      "wind")) %>% 
+  add_row(AccSpeciesName = c("Sambucus nigra" ,"Abies grandis",  "Abies procera", 
+                                "Acer campestre"  , "Aesculus hippocastanum", "Alnus glutinosa","Alnus incana",
+                                "Betula pubescens", "Betula", "Botrychium lunaria",  "Carpinus betulus",
+                                "Castanea sativa", "Chamaecyparis lawsoniana", "Crataegus monogyna", "Cryptomeria japonica",
+                                "Cupressus", "Ilex aquifolium", "Larix kaempferi","Malus sylvestris",
+                                "Nothofagus", "Picea omorika", "Picea sitchensis", "Pinus contorta",
+                                "Pinus nigra", "Pinus", "Populus", "Populus tremula",
+                                "Prunus avium", "Prunus padus"  , "Pseudotsuga menziesii",
+                                "Quercus robur","Quercus rubra", "Quercus", "Salix caprea",
+                                "Salix cinerea","Sequoia sempervirens", "Sorbus aria", "Sorbus torminalis",
+                                "Taxus baccata","Thuja plicata", "Tilia", "Tsuga heterophylla",
+                                "Ulmus glabra","Ulmus procera"),
+             
+             polmode = c("not wind","wind","wind",
+                         "not wind","not wind","wind","wind",
+                         "wind","wind","wind","wind",
+                         "wind","wind", "not wind", "wind",
+                         "wind", "not wind","wind","not wind",
+                         "wind","wind","wind", "wind",
+                         "wind","wind","wind","wind",
+                         "not wind","not wind","wind",
+                         "wind","wind","wind","wind",
+                         "wind","wind","not wind","not wind",
+                         "wind","wind","not wind","wind",
+                         "wind", "wind"
+             )) %>% 
+  # Ericaceae specified as non wind pollinated in pollen data, do the same for veg
   mutate(polmode = case_when(AccSpeciesName %in% c("Calluna vulgaris") ~ "not wind",
-                                TRUE ~ polmode))
-
+                                TRUE ~ polmode)) %>% 
+  filter(!(AccSpeciesName == "Carex" & polmode == "not wind"))
+  
+  
 dfPFT <- full_join(pft, polmode, by = "AccSpeciesName") %>% 
   distinct()
-saveRDS(dfPFT, "RDS_files/Polmode_pft_vegetation.rds")
 
-# Make summary table per site -----
-dfPFT <- readRDS("RDS_files/Polmode_pft_vegetation.rds")
-zoneA <- dfABUN_a %>%
-  rename(family = fam) %>% 
-  ungroup %>% 
-  mutate(zone = "zoneA",
-         country = "Scotland")
-zoneB <- dfABUN_bc %>% 
-  ungroup() %>% 
-  dplyr::select(sitename, stand.spec, genus, family = fam,
-                abun = spec_abun_b) %>% 
-  mutate(zone = "zoneB",
-         country = "Scotland")
-zoneC <- dfABUN_bc %>% 
-  ungroup %>% 
-  dplyr::select(sitename, stand.spec, genus, family = fam, 
-                abun = spec_abun_c) %>% 
-  mutate(zone = "zoneC",
-         country = "Scotland")
-bdm_zoneA <- bdm_abun %>%
-  dplyr::select(sitename, stand.spec, genus, family, abun) %>%
-  mutate(sitename = as.character(sitename)) %>%
-  mutate(zone = "zoneA",
-         country = "Switzerland")
-
-dfABUN  <- bind_rows(zoneA, zoneB, zoneC,
-                     bdm_zoneA)
-
-sum_polmode <- dfABUN %>% 
-  left_join(dfPFT, by = c("stand.spec" = "AccSpeciesName")) %>% 
-  group_by(zone, sitename, polmode) %>% 
-  # percentage of pollination type
-  summarise(abun = sum(abun, na.rm = T)) %>% 
-  mutate(abun = abun/sum(abun)) %>% 
-  pivot_wider(names_from = polmode, values_from = abun)
-  
-sum <- dfABUN %>% 
-  left_join(dfPFT, by = c("stand.spec" = "AccSpeciesName")) %>% 
-  mutate(growthform = case_when(growthform %in% c("tree", "shrub") ~ "Woody",
-                                growthform %in% c("herb", "grass", "fern") ~ "Non-Woody")
-  ) %>% 
-  group_by(zone, sitename, growthform) %>% 
-  # percentage of growthform type
-  summarise(abun = sum(abun)) %>% 
-  mutate(abun = abun/sum(abun, na.rm = T)) %>% 
-  pivot_wider(names_from = growthform, values_from = abun) %>% 
-  # bind with pollination mode summary
-  left_join(sum_polmode, by = c("zone", "sitename"), suffix = c("_pft", "_polmode")) %>% 
-  mutate(across(where(is.numeric), ~round(.,2)*100))
-
-saveRDS(sum, "RDS_files/01_Percentage_cover_pft.rds")
-
+saveRDS(dfPFT, "RDS_files/01_Polmode_pft_vegetation.rds")
