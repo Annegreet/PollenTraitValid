@@ -79,9 +79,7 @@ pft <- traits %>%
   filter(!(AccSpeciesName == "Dryopteris" & growthform == "herb")) %>% 
   filter(!(AccSpeciesName == "Empetrum nigrum" & growthform == "shrub")) %>% 
   filter(!(AccSpeciesName == "Equisetum sylvaticum" & growthform == "shrub")) %>% 
-  filter(!(AccSpeciesName == "Equisetum" & growthform == "fern")) %>% 
   filter(!(AccSpeciesName == "Galium rotundifolium" & growthform == "shrub")) %>% 
-  filter(!(AccSpeciesName == "Holcus lanatus" & growthform == "herb")) %>% 
   filter(!(AccSpeciesName == "Equisetum sylvaticum" & growthform == "herb")) %>% 
   filter(!(AccSpeciesName == "Juncus bufonius" & growthform == "tree")) %>% 
   filter(!(AccSpeciesName == "Juniperus communis" & growthform == "tree")) %>% 
@@ -90,7 +88,6 @@ pft <- traits %>%
   filter(!(str_detect(AccSpeciesName,"Luzula") & growthform == "shrub")) %>% 
   filter(!(AccSpeciesName == "Luzula multiflora" & growthform == "herb")) %>% 
   filter(!(AccSpeciesName == "Milium effusum" & growthform == "herb")) %>% 
-  filter(!(AccSpeciesName == "Molinia caerulea" & growthform == "herb")) %>% 
   filter(!(AccSpeciesName == "Nardus stricta" & growthform == "herb")) %>% 
   filter(!(AccSpeciesName == "Orthilia secunda" & growthform == "shrub")) %>% 
   filter(!(str_detect(AccSpeciesName, "Plantago") & growthform == "tree")) %>% 
@@ -104,7 +101,6 @@ pft <- traits %>%
   filter(!(str_detect(AccSpeciesName, "Rumex") & growthform == "tree")) %>% 
   filter(!(AccSpeciesName == "Stellaria media" & growthform == "tree")) %>% 
   filter(!(AccSpeciesName == "Stellaria media" & growthform == "shrub")) %>% 
-  filter(!(AccSpeciesName == "Salix" & growthform == "tree")) %>% 
   filter(!(AccSpeciesName == "Trichophorum cespitosum" & growthform == "herb")) %>% 
   filter(!(AccSpeciesName == "Trifolium repens" & growthform == "tree")) %>% 
   filter(!(AccSpeciesName == "Urtica dioica" & growthform == "shrub")) %>% 
