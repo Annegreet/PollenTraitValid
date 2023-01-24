@@ -3,7 +3,7 @@ output:
   word_document:
     reference_docx: "Manuscript-Markdown-template.docx"
     fig_caption: yes
-bibliography: Validation_study_references.bib
+  bibliography: Validation_study_references.bib
 ---
 
 ```{r setup, include=FALSE}
@@ -17,6 +17,7 @@ knitr::opts_chunk$set(echo = FALSE,
 source("01_Prepare_pollen_data.R")
 
 # Libraries
+library(tidyverse)
 library(bibtex)
 library(knitr)
 
@@ -33,6 +34,8 @@ bdm_meta <- readRDS("RDS_files/01_Meta_data_BDM.rds")
 -   needs more testing
 
 -   we advocate for more testing with greater sample size
+
+-   need to take in to account trait variation pollen types
 
 ## Introduction
 
@@ -154,8 +157,7 @@ Despite here showing little evidence for pollen being a reliable proxy for past 
 
 the traits of species that do not show up in the dat.a
 
-
--   
+-   swiss - grass land receiving input from forests
 
 -   traits of species that do not show up in the pollen record.
 
@@ -212,6 +214,9 @@ These studies have showed
     -   large trait variation in pollen
 
     -   Is this a pollen problem or a trait problem?
+    - ambiguous relationship between vegetation and pollen trait 
+    - suggested positive, but credibility interval intersects 0 _> interpretation with caution
+    - largerr sample size needed
 
 ## References
 
@@ -219,7 +224,11 @@ These studies have showed
 
 ## Appendix
 
-### Pollen representation
+## Pollen percentages
+
+![Pollen percentage of the most abundant (\> 5%) taxa in Scotland. The effect of the application of pollen productivity estimates to the representation of pollen taxa is shown by the coloured bars. ![Pollen percentage of the most abundant (\> 5%) taxa in Switzerland. Sites are sorted in order of increasing elevation (top to bottom). The effect of the application of pollen productivity estimates to the representation of pollen taxa is shown by the coloured bars.](Figures/Pollen_percentage_swiss.png)](Figures/Pollen_percentage_scotland.png)
+
+## Pollen representation
 
 ![Scatter plot of vegetation basal area % against pollen abundance %. Coloured dots represent either wind or non-wind pollinated taxa.](Figures/Pollen_rep_percent.png)
 
@@ -276,6 +285,8 @@ ggplot(data = bdm_meta) +
 
 ![](Figures/Scatter_pollination.png)
 
-### ![](Figures/Scatter_taxonomic_resolution.png)Effect of removal of taxa on CWM trait values
+### ![](Figures/Scatter_taxonomic_resolution.png)
+
+### Effect of removal of taxa on CWM trait values
 
 ![](Figures/CWM_pollen_removed_taxa.png)

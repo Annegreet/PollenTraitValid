@@ -29,13 +29,12 @@ if (!require(runjags)) install.packages("runjags")
 if (!require(furrr)) install.packages("furrr")
 
 # load PFT summary table
-# filter sites with to little vegetation cover of particular type
-sum_pft <- readRDS("RDS_files/01_Percentage_cover_pft.rds")
-dropsites <- sum_pft %>% 
-  transmute(drop_herb = case_when(`Non-Woody`<= 5 ~ paste(zone, sitename)),
-            drop_trsh = case_when(Woody <= 5 ~ paste(zone, sitename)),
-            drop_wind = case_when(wind <= 5 ~ paste(zone, sitename)),
-            drop_nowind = case_when(`not wind` <= 5 ~ paste(zone, sitename)))
+# to filter sites with to little vegetation cover of particular type
+sum_pft <- readRDS("RDS_files/01_Percentage_cover_pft.rds") %>% 
+  replace_na(list(`Non-Woody` = 0,
+                  Woody = 0,
+                  `not wind` = 0,
+                  wind = 0)) 
 
 # collate data
 traits <- c("LA","SLA","PlantHeight")
@@ -44,7 +43,7 @@ pollen_files <- list.files("RDS_files/") %>%
   str_subset(pattern = "03_zCWM_estimates_") %>% 
   str_subset(paste(traits, collapse = "|")) %>% 
   str_subset(pattern = "pollen") %>% 
-  str_subset(pattern = "notinpollen", negate = TRUE)
+  str_subset(pattern = "notinpollen", negate = TRUE) 
 
 pollen_lab <- pollen_files %>% 
   str_subset(paste(traits, collapse = "|")) %>% 
@@ -92,16 +91,19 @@ dfCWM_veg <- veg_files %>%
   bind_rows() %>% 
   as_tibble() %>% 
   mutate(country = str_extract(label, pattern = "Scotland|Switzerland"),
-         pollination = dplyr::recode(pollination, `no wind` = "not wind")) %>% 
-  dplyr::select(country, sitename, trait, veg_mean = Mean, veg_sd = SD,
-                growthform, pollination, taxres, zone) %>% 
+         pollination = dplyr::recode(pollination, `no wind` = "not wind")) %>%
+  # only Scottish data
+  filter(country == "Scotland") %>% 
   # remove sites with to little cover of pft (5% or less) 
-  # see sites in df dropsites
-  filter(!(growthform == "trsh" & zone == "zoneA"), # Too little sites with tree cover in zone A
-         !(growthform == "trsh" & zone == "zoneB" & sitename %in% c("C004","C005","C006", "C013")),
-         !(growthform == "trsh" & zone == "zoneC" & sitename %in% c("C006","C015")),
-         !(pollination == "wind" & zone == "zoneA" & sitename %in% c("C009","C015"))) %>% 
-  filter(country == "Scotland") 
+  left_join(sum_pft, by = c("sitename", "zone")) %>% 
+  filter((growthform == "allpft" & pollination == "allpol") |
+         (growthform == "trsh" & Woody >= 5) |
+         (growthform == "herb" & `Non-Woody` >= 5) |
+         (pollination == "wind" & wind >= 5) |
+         (pollination == "not wind" & `not wind` >= 5)) %>% 
+  dplyr::select(country, sitename, trait, veg_mean = Mean, veg_sd = SD,
+              growthform, pollination, taxres, zone) 
+
 
 
 selectedtrait <- "PlantHeight"
@@ -109,45 +111,59 @@ selectedzone <- "zoneB"
 
 cor_bay <- function(cwm, selectedzone, selectedtrait, selectedtreatment){
   CWM <- cwm %>% 
-    filter(zone == selectedzone,
-           trait == selectedtrait)
-  pollen_cwm <- CWM %>% 
-    pull(pollen_mean) 
-  veg_cwm <- CWM %>% 
-    pull(veg_mean) 
-  pollen_sd <- CWM %>% 
-    pull(pollen_sd) 
-  veg_sd <- CWM %>% 
-    pull(veg_sd) 
-  N <- length(pollen_cwm)
+    filter(trait == selectedtrait)
+  CWM_mean <- CWM %>% 
+    ungroup() %>% 
+    dplyr::select(pollen_mean, veg_mean) %>% 
+    as.matrix() 
+  CWM_sd <- CWM %>%
+    ungroup() %>%
+    dplyr::select(pollen_sd, veg_sd) %>% 
+    as.matrix() 
+  N <- nrow(CWM_mean)
   
-  model <- "model {
-    for(i in 1:N) {
-      pollen_cwm[i] ~ dt(regression_fitted[i], 1/pollen_sd[i]^2, df)
-      regression_fitted[i] <- 0 + slope * veg_cwm[i] 
-    }
-    # Priors
-    slope ~ dunif(-1,1)
-    df ~ dexp(1/30) # df of t distribution, Values of d) larger than about 30.0 make the t distribution roughly normal
-  }
-
-  #monitor# slope, df
-  #data# pollen_cwm, veg_cwm, pollen_sd, N 
-  #inits# slope, df
-  "
-  slope <- list(chain1 = -1, chain2 = 0, chain3 = 1)
+  model_string <- "
+    model {
+      for(i in 1:N) {
+        CWM_mean[i,1:2] ~ dmt(mu[], prec[,,i], df)
+        }
+  
+      # Constructing the covariance matrix and the corresponding precision matrix.
+      for(i in 1:N){
+        prec[1:2,1:2,i] <- inverse(cov[,,i])
+        cov[1,1,i] <- CWM_sd[i,1] * CWM_sd[i,1]
+        cov[1,2,i] <- CWM_sd[i,1] * CWM_sd[i,2] * rho
+        cov[2,1,i] <- CWM_sd[i,1] * CWM_sd[i,2] * rho
+        cov[2,2,i] <- CWM_sd[i,2] * CWM_sd[i,2]
+      }
+  
+      # standard deviation
+      CWM_sd[i,1] ~ dnorm(0, 0.01)
+      # Priors
+      rho ~ dunif(-1, 1)
+      mu[1] ~ dnorm(0, 0.01)
+      mu[2] ~ dnorm(0, 0.01)
+      df ~ dexp(1/30) # df of t distribution, Values of d) larger than about 30.0 make the t distribution roughly normal
+  
+      #data# N, CWM_mean, CWM_sd
+      #monitor# rho, mu, df
+      #inits# rho, mu
+    }"
+  
+  rho <- list(chain1 = -0.99999, chain2 = 0, chain3 = 0.99999)
   df <- list(chain1 = 1, chain2 = 15, chain3 = 30)
+  mu <- list(chain1 = c(0,0),
+             chain2 = c(-1,-1),
+             chain3 = c(1,1))
   
   # run model 
-  (results <- run.jags(model, n.chains = 3, sample = 20000,
-                       modules = "glm on"))
-  plot(results)
+  results <- run.jags(model_string, n.chains = 3, sample = 20000)
   
   # save convergence diagnostics
-  plot(results, file = paste0("Convergence_diagnostics/04_Covergence_correlation_regression_",selectedtrait,
+  plot(results, file = paste0("Convergence_diagnostics/04_Covergence_correlation_",selectedtrait,
                               "_", selectedzone,"_",selectedtreatment, ".pdf" ))
   # gelman plots
-  pdf(paste0("Convergence_diagnostics/04_Gelman_correlation_regression_", selectedtrait,
+  pdf(paste0("Convergence_diagnostics/04_Gelman_correlation_", selectedtrait,
              "_", selectedzone,"_",selectedtreatment, ".pdf"))
   gelman.plot(results, ask = FALSE)
   dev.off()
@@ -158,9 +174,9 @@ cor_bay <- function(cwm, selectedzone, selectedtrait, selectedtreatment){
     mutate(trait = selectedtrait,
            zone = selectedzone,
            treatment = selectedtreatment,
-           cor_nonbay = cor(pollen_cwm, veg_cwm))
+           cor_nonbay = cor(CWM_mean)[1,2])
   
-  saveRDS(results_summary, paste0("RDS_files/04_rho_regression_", selectedtrait,
+  saveRDS(results_summary, paste0("RDS_files/04_rho_", selectedtrait,
                                   "_", selectedzone, "_", selectedtreatment, ".rds"))
   return(results_summary)
   
@@ -176,7 +192,7 @@ names(zone_lab) <- c("zoneA","zoneB","zoneC")
 corrplot <- function(rhos, nobs, labels){
   rhos %>% 
     # get rid of estimates of mu and df
-    filter(parameter == "slope") %>% 
+    filter(parameter == "rho") %>% 
     # make sure the order of zones is right
     mutate(zone = fct_relevel(zone, "zoneC", "zoneB","zoneA")) %>% 
     ggplot(aes(x = zone, y = Mean, fill = treatment)) + 
@@ -214,6 +230,8 @@ cwm <- dfCWM_pol %>%
          pollination == "allpol",
          correction == "no correction") %>% 
   left_join(dfCWM_veg, by = c("country", "sitename", "trait", "growthform", "pollination")) %>% 
+  # plant height in zone B has bimodal distribution, remove from dataset
+  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
   filter(taxres == "stand.spec") 
 
 combo <- cwm %>% 
@@ -230,7 +248,14 @@ cwm2 <- dfCWM_pol %>%
          pollination == "allpol",
          correction == "correction") %>% 
   left_join(dfCWM_veg, by = c("country","sitename", "trait", "growthform", "pollination")) %>% 
+  # plant height in zone B has bimodal distribution, remove from dataset
+  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
   filter(taxres == "stand.spec") 
+
+combo <- cwm %>% 
+  dplyr::select(trait, zone) %>% 
+  distinct() 
+
 rhos2 <- purrr::map2_dfr(combo$zone, combo$trait, 
                          ~cor_bay(cwm2, selectedzone = .x, selectedtrait = .y,
                                   selectedtreatment =  "correction")) %>% 
@@ -239,19 +264,23 @@ rhos2 <- purrr::map2_dfr(combo$zone, combo$trait,
 # df with number of observations 
 nobs <- cwm2 %>% 
   bind_rows(cwm) %>% 
+  # plant height in zone B has bimodal distribution, remove from dataset
+  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
   group_by(trait, zone, correction) %>% 
   summarise(label = n(), .groups = "keep") %>% 
-  left_join(rhos2[rhos2$parameter == "slope", ], by = c("trait",  "zone", "correction" = "treatment")) %>% 
+  left_join(rhos2[rhos2$parameter == "rho", ], by = c("trait",  "zone", "correction" = "treatment")) %>% 
   dplyr::select(label,  zone, trait, Mean, treatment = "correction") %>% 
   ungroup() %>% 
   arrange(trait) %>% 
-  mutate(x = rep(c(2.75,3,1.75,2,0.75,1), 3))
+  mutate(x = c(2.75,3,1.75,2,0.75,1,
+               2.75,3,0.75,1,
+               2.75,3,1.75,2,0.75,1))
 
 # plot
 p_rho <- corrplot(rhos2, nobs, c("correction" = "Correction",
                                  "no correction" = "No correction")) 
 
-ggsave("Figures/Pollen_correction_factors_regression.png", p_rho, width = 7, height = 3)
+ggsave("Figures/Pollen_correction_factors.png", p_rho, width = 7, height = 3)
 
 ## Pollination mode ----
 # Wind
@@ -283,7 +312,7 @@ nobs_pol <- cwm_nowind %>%
   bind_rows(cwm_wind) %>% 
   group_by(trait, zone, pollination) %>% 
   summarise(label = n(), .groups = "keep") %>% 
-  left_join(rhos_pol[rhos_pol$parameter == "slope", ],
+  left_join(rhos_pol[rhos_pol$parameter == "rho", ],
             by = c("trait",  "zone", "pollination" = "treatment")) %>% 
   dplyr::select(label,  zone, trait, Mean, treatment = "pollination") %>% 
   ungroup() %>% 
@@ -292,7 +321,7 @@ nobs_pol <- cwm_nowind %>%
 
 p_rho <- corrplot(rhos_pol, nobs_pol, c( "wind" = "Wind pollinated",
                                          "not wind" = "Not wind pollinated"))
-ggsave("Figures/Pollination_mode_regression.png", p_rho, width = 7, height = 3)
+ggsave("Figures/Pollination_mode.png", p_rho, width = 7, height = 3)
 
 ## Plant functional type ----
 # Trees and Shrubs
@@ -328,7 +357,7 @@ nobs_pft <- cwm_herb %>%
   bind_rows(cwm_trsh) %>% 
   group_by(trait, zone, growthform) %>% 
   summarise(label = n(), .groups = "keep") %>% 
-  left_join(rhos_pft[rhos_pft$parameter == "slope", ],
+  left_join(rhos_pft[rhos_pft$parameter == "rho", ],
             by = c("trait",  "zone", "growthform" = "treatment")) %>% 
   dplyr::select(label,  zone, trait, Mean, treatment = "growthform") %>% 
   ungroup() %>% 
@@ -336,7 +365,7 @@ nobs_pft <- cwm_herb %>%
   mutate(x = rep(c(2.86,1.75,2,0.75,1), 3))
 
 p_rho <- corrplot(rhos_pft, nobs_pft, c("trsh" = "Woody", "herb" = "Non-Woody"))
-ggsave("Figures/PFT_regression.png", p_rho, width = 7, height = 3)
+ggsave("Figures/PFT.png", p_rho, width = 7, height = 3)
 
 ## Taxonomic resolution ----
 # Species
@@ -349,6 +378,8 @@ cwm_gen <- dfCWM_pol %>%
          pollination == "allpol",
          correction == "no correction") %>% 
   left_join(dfCWM_veg, by = c("country", "sitename", "trait", "growthform", "pollination")) %>% 
+  # plant height in zone B has bimodal distribution, remove from dataset
+  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
   filter(taxres == "genus") 
 
 rhos_gen <- purrr::map2_dfr(combo$zone, combo$trait, 
@@ -360,6 +391,8 @@ cwm_fam <- dfCWM_pol %>%
          pollination == "allpol",
          correction == "no correction") %>% 
   left_join(dfCWM_veg, by = c("country","sitename", "trait", "growthform", "pollination")) %>% 
+  # plant height in zone B has bimodal distribution, remove from dataset
+  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
   filter(taxres == "family") 
 
 rhos_taxres <- purrr::map2_dfr(combo$zone, combo$trait, 
@@ -374,19 +407,26 @@ nobs_taxres <- cwm_fam %>%
   bind_rows(cwm_sp) %>%
   group_by(trait, zone, taxres) %>%
   summarise(label = n(), .groups = "keep") %>%
-  left_join(rhos_taxres[rhos_taxres$parameter == "slope", ], by = c("trait",  "zone", "taxres" = "treatment")) %>%
+  # plant height in zone B has bimodal distribution, remove from dataset
+  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
+  left_join(rhos_taxres[rhos_taxres$parameter == "rho", ], by = c("trait",  "zone", "taxres" = "treatment")) %>%
   dplyr::select(label,  zone, trait, Mean, treatment = "taxres") %>%
   ungroup() %>%
   arrange(trait) %>% 
-  mutate(x = rep(c(2.66,2.84,3,
-                   1.66,1.84,2,
-                   0.66,0.84,1), 3))
+  mutate(x = c(2.66,2.84,3,
+               1.66,1.84,2,
+               0.66,0.84,1,
+               2.66,2.84,3,
+               0.66,0.84,1,
+               2.66,2.84,3,
+               1.66,1.84,2,
+               0.66,0.84,1))
 
 p_rho <- corrplot(rhos_taxres, nobs_taxres, c("family" = "Family",
                                               "genus" = "Genus",
                                               "stand.spec" = "Species"))
 
-ggsave("Figures/Taxonomic_resolution_regression.png", p_rho, width = 7, height = 4)
+ggsave("Figures/Taxonomic_resolution.png", p_rho, width = 7, height = 4)
 
 ## Pollen correction + uncertainty ----
 cor_bay_draw <- function(cwm, selectedzone, selectedtrait, 
@@ -395,45 +435,56 @@ cor_bay_draw <- function(cwm, selectedzone, selectedtrait,
     filter(zone == selectedzone,
            trait == selectedtrait,
            correction == selecteddraw)
-  CWM <- cwm %>% 
-    filter(zone == selectedzone,
-           trait == selectedtrait)
-  pollen_cwm <- CWM %>% 
-    pull(pollen_mean) 
-  veg_cwm <- CWM %>% 
-    pull(pollen_mean) 
-  pollen_sd <- CWM %>% 
-    pull(pollen_sd) 
+  CWM_mean <- cwm %>% 
+    ungroup() %>% 
+    dplyr::select(pollen_mean, veg_mean) %>% 
+    as.matrix() 
+  CWM_sd <- cwm %>%
+    ungroup() %>%
+    dplyr::select(pollen_sd, veg_sd) %>% 
+    as.matrix() 
+  N <- nrow(CWM_mean)
   
-  N <- length(pollen_cwm)
+  model_string <- "
+    model {
+      for(i in 1:N) {
+        CWM_mean[i,1:2] ~ dmt(mu[], prec[,,i], df)
+        }
   
-  model <- "model {
-    for(i in 1:N) {
-      pollen_cwm[i] ~ dt(regression_fitted[i], 1/pollen_sd[i]^2, df)
-      regression_fitted[i] <- 0 + slope * veg_cwm[i]
-    }
-    
-    # Priors
-    slope ~ dunif(-1, 1)
-    df ~ dexp(1/30) # df of t distribution, Values of d) larger than about 30.0 make the t distribution roughly normal
-  }
-
-  #monitor# slope, df
-  #data# pollen_cwm, veg_cwm, pollen_sd,  N 
-  #inits# slope, df
-  "
-  slope <- list(chain1 = -1, chain2 = 0, chain3 = 1)
+      # Constructing the covariance matrix and the corresponding precision matrix.
+      for(i in 1:N){
+        prec[1:2,1:2,i] <- inverse(cov[,,i])
+        cov[1,1,i] <- CWM_sd[i,1] * CWM_sd[i,1]
+        cov[1,2,i] <- CWM_sd[i,1] * CWM_sd[i,2] * rho
+        cov[2,1,i] <- CWM_sd[i,1] * CWM_sd[i,2] * rho
+        cov[2,2,i] <- CWM_sd[i,2] * CWM_sd[i,2]
+      }
+  
+      # Priors
+      rho ~ dunif(-1, 1)
+      mu[1] ~ dnorm(0, 0.01)
+      mu[2] ~ dnorm(0, 0.01)
+      df ~ dexp(1/30) # df of t distribution, Values of d) larger than about 30.0 make the t distribution roughly normal
+  
+      #data# N, CWM_mean, CWM_sd
+      #monitor# rho, mu
+      #inits# rho, mu,df
+    }"
+  
+  rho <- list(chain1 = -0.99999, chain2 = 0, chain3 = 0.99999)
   df <- list(chain1 = 1, chain2 = 15, chain3 = 30)
+  mu <- list(chain1 = c(0,0),
+             chain2 = c(-1,-1),
+             chain3 = c(1,1))
   
   # run model 
-  (results <- run.jags(model, n.chains = 3, sample = 20000))
-  plot(results)
+  results <- run.jags(model_string, n.chains = 3)
   
   # save convergence diagnostics
-  plot(results, file = paste0("Convergence_diagnostics/04_Covergence_correlation_regression_",selectedtrait,
+  plot(results, file = paste0("Convergence_diagnostics/04_Covergence_correlation_",selectedtrait,
                               "_", selectedzone,"_",selectedtreatment, ".pdf" ))
   # gelman plots
-  pdf(paste0("Convergence_diagnostics/04_Gelman_correlation_regression_", selectedtrait,
+  pdf(paste0("Convergence_diagnostics/04_Gelman_correlation_", selectedtrait,
              "_", selectedzone,"_",selectedtreatment, ".pdf"))
   gelman.plot(results, ask = FALSE)
   dev.off()
@@ -454,7 +505,9 @@ cwm_draw <- dfCWM_pol %>%
   filter(growthform == "allpft",
          pollination == "allpol",
          str_detect(correction, pattern = "draw")) %>%
-  left_join(dfCWM_veg, by = c("country","sitename", "trait", "growthform", "pollination")) %>%
+  left_join(dfCWM_veg, by = c("country","sitename", "trait", "growthform", "pollination")) %>% 
+  # plant height in zone B has bimodal distribution, remove from dataset
+  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
   filter(taxres == "stand.spec")
 
 combo <- expand_grid(zone = unique(cwm_draw$zone), correction = unique(cwm_draw$correction))
@@ -494,4 +547,4 @@ rhos_draw <- rhos_LA %>%
           legend.position = "bottom",
           legend.margin = margin(-25,0,0,0))
 ) 
-ggsave("Figures/Correction_draw_regression.png", p_rho, width = 7, height = 3)
+ggsave("Figures/Correction_draw.png", p_rho, width = 7, height = 3)
