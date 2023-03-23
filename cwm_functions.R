@@ -8,8 +8,6 @@ cwm_veg_scot <- function(selectedabun, selectedtrait, selectedtaxres, selectedpo
     # optional filter for polmode and pft
     filter(polmode %in% selectedpolmode) %>% 
     filter(growthform %in% selectedpft) %>% 
-    # optional to filter out taxa that are not in pollen data
-    {if (notinpollen) filter(., !pollentaxon == "Not in pollen data") else . } %>% 
     # rename column to selected taxonomic resolution
     rename(tax = all_of(selectedtaxres)) %>% 
     filter(!tax == "Unindentified") %>% 
@@ -125,13 +123,13 @@ cwm_veg_scot <- function(selectedabun, selectedtrait, selectedtaxres, selectedpo
   plot(results, file =
          paste0("Convergence_diagnostics/Conv_", selectedabun,"_Scotland_", selectedtrait,
                 "_", selectedtaxres, "_", paste(selectedpolmode, collapse = ""),"_",
-                paste(selectedpft, collapse = ""),ifelse(notinpollen == T, "_notinpollen",""), ".pdf")
+                paste(selectedpft, collapse = ""), ".pdf")
   )
   
   # gelman plots
   pdf(paste0("Convergence_diagnostics/Gelman_", selectedabun,"_Scotland_", selectedtrait,
              "_", selectedtaxres, "_", paste(selectedpolmode, collapse = ""),"_",
-             paste(selectedpft, collapse = ""),ifelse(notinpollen == T, "_notinpollen",""), ".pdf")
+             paste(selectedpft, collapse = ""), ".pdf")
   )
   gelman.plot(results, ask = FALSE)
   dev.off()
@@ -194,6 +192,158 @@ cwm_veg_scot <- function(selectedabun, selectedtrait, selectedtaxres, selectedpo
   }
   
 }
+# CWM vegetation Scotland - only trait data from TRY----
+cwm_veg_scot_gap <- function(selectedabun, selectedtrait, selectedtaxres, selectedpolmode, 
+                         selectedpft, notinpollen = FALSE, taxtrait = FALSE){
+  ## prepare abundance data
+  abun <- lABUN %>% 
+    # select zone 
+    pluck(selectedabun) %>% 
+    # optional filter for polmode and pft
+    filter(polmode %in% selectedpolmode) %>% 
+    filter(growthform %in% selectedpft) %>% 
+    # rename column to selected taxonomic resolution
+    rename(tax = all_of(selectedtaxres)) %>% 
+    filter(!tax == "Unindentified") %>% 
+    dplyr::select(sitename, tax, abun) %>% 
+    drop_na() 
+  
+  # taxa in the abundance data
+  taxa <- abun %>% 
+    pull(tax) %>% 
+    unique() %>% 
+    sort
+  
+  ## prepare trait data
+  TRY <- dfTRY %>% 
+    dplyr::select(tax = all_of(selectedtaxres), 
+                  all_of(selectedtrait))
+  
+  # Create trait data df with field an try data
+  trait <- TRY %>% 
+    filter(tax %in% taxa) %>%
+    # sort alphabetically
+    arrange(tax) %>%
+    # drop NA's and 0's
+    mutate(across(where(is.double), ~na_if(.,0))) %>%
+    drop_na() %>% 
+    # check number of observations
+    group_by(tax) %>% 
+    mutate(ntrait = n()) %>% 
+    filter(ntrait >= 10)
+  
+  ## Model data (capitalized)
+  Trait <- trait %>% 
+    pull(selectedtrait)
+  
+  Tax <- trait  %>% 
+    pull(tax) %>% 
+    as.factor()
+  
+  # Prepare abundance matrix
+  Ab <- abun %>%
+    # filter species without enough data 
+    filter(tax %in% unique(Tax)) %>% 
+    # calculate species abundance on the plot level
+    group_by(sitename, tax) %>% 
+    summarise(abun = sum(abun)) %>% 
+    mutate(abun = abun/sum(abun)) %>% 
+    filter(!is.nan(abun)) %>%  # filters sites without species of particular selection
+    # convert to wide format
+    pivot_wider(names_from = tax, values_from = abun,
+                values_fill = 0) %>% 
+    ungroup() 
+  # save site names with data
+  sitenames <- Ab %>% pull(sitename)
+  
+  Ab <- Ab %>% 
+    dplyr::select(-sitename) %>% 
+    # sort alphabetically
+    select(order(colnames(.))) %>% 
+    as.matrix() 
+  
+  N <- length(Trait)
+  
+  Ntax <- ncol(Ab)
+  Nsites <- nrow(Ab) 
+  
+  # for setting inits taxon level
+  MeanLog <- aggregate(Trait, list(Tax), FUN = mean)[,"x"] %>% log()
+  SDLog <- aggregate(Trait, list(Tax), FUN = sd)[,"x"] %>%
+    log() %>% 
+    na_if(., 0) # prior cant take 0 or negative
+  SDLog[SDLog < 0] <- NA  
+  SDLog <- replace_na(SDLog, mean(SDLog, na.rm = TRUE))  # in case of only 1 obs set sd to mean sd
+  
+  # initial values
+  mean.tax.log <- list(chain1 = MeanLog*0.01, chain2 = MeanLog*100)
+  sd.tax.log <- list(chain1 = SDLog*0.01, chain2 = SDLog*100)
+  cwm <- list(chain1 = rep(min(log(Trait)), Nsites), 
+              chain2 = rep(max(log(Trait)), Nsites))
+  
+  # run model
+  results <- run.jags("CWM_log_prior_data.txt", n.chains = 2)
+  
+  # trace plots
+  plot(results, file =
+         paste0("Convergence_diagnostics/Conv_", selectedabun,"_Scotland_", selectedtrait,
+                "_", selectedtaxres, "_", paste(selectedpolmode, collapse = ""),"_",
+                paste(selectedpft, collapse = ""), "_Gapfilled.pdf")
+  )
+  
+  # gelman plots
+  pdf(paste0("Convergence_diagnostics/Gelman_", selectedabun,"_Scotland_", selectedtrait,
+             "_", selectedtaxres, "_", paste(selectedpolmode, collapse = ""),"_",
+             paste(selectedpft, collapse = ""), "_Gapfilled.pdf")
+  )
+  gelman.plot(results, ask = FALSE)
+  dev.off()
+  
+  # save CWM values
+  res <- as.data.frame(summary(results, vars = "cwm")) %>%
+    # filter cwm values
+    rownames_to_column("parameter") %>%
+    filter(!str_detect(parameter, "zcwm")) %>% 
+    mutate(sitename = sitenames,
+           trait = selectedtrait,
+           growthform = case_when(all(selectedpft %in% trsh) ~ "trsh",
+                                  all(selectedpft %in% herb) ~ "herb",
+                                  TRUE ~ "allpft"),
+           pollination = case_when(all(selectedpolmode %in% wind) ~ "wind",
+                                   all(selectedpolmode %in% nowind) ~ "no wind",
+                                   TRUE ~ "allpol"),
+           taxres = selectedtaxres,
+           zone = selectedabun,
+           notinpollendata = notinpollen)
+  
+  saveRDS(res, paste0("RDS_files/03_CWM_estimates_",selectedabun,"_Scotland_", selectedtrait,
+                      "_", selectedtaxres, "_",
+                      paste(selectedpolmode, collapse = ""),"_", 
+                      paste(selectedpft, collapse = ""), ifelse(notinpollen == T, "_notinpollen",""),"_Gapfilled.rds"))
+  
+  # save standardized CWM values
+  zres <- as.data.frame(summary(results, vars = "zcwm")) %>%
+    # filter cwm values
+    rownames_to_column("parameter") %>%
+    mutate(sitename = sitenames,
+           trait = selectedtrait,
+           growthform = case_when(all(selectedpft %in% trsh) ~ "trsh",
+                                  all(selectedpft %in% herb) ~ "herb",
+                                  TRUE ~ "allpft"),
+           pollination = case_when(all(selectedpolmode %in% wind) ~ "wind",
+                                   all(selectedpolmode %in% nowind) ~ "no wind",
+                                   TRUE ~ "allpol"),
+           taxres = selectedtaxres,
+           zone = selectedabun,
+           notinpollendata = notinpollen)
+  
+  saveRDS(zres, paste0("RDS_files/03_zCWM_estimates_",selectedabun,"_Scotland_", selectedtrait,
+                       "_", selectedtaxres, "_",
+                       paste(selectedpolmode, collapse = ""),"_", 
+                       paste(selectedpft,collapse = ""), ifelse(notinpollen == T, "_notinpollen",""),"_Gapfilled.rds"))
+  
+  }
+  
 
 # CWM vegetation Switzerland ----
 cwm_veg_swiz <- function(selectedabun, selectedtrait, selectedtaxres, selectedpolmode, selectedpft,
@@ -591,7 +741,7 @@ cwm_pol <- function(selectedtrait, selectedcountry, selectedabun, taxtrait = FAL
   dev.off()
   
   # Save cwm values
-  res <-  res <- as.data.frame(summary(results, vars = "cwm")) %>%
+  res <- as.data.frame(summary(results, vars = "cwm")) %>%
     # filter cwm values
     rownames_to_column("parameter") %>%
     filter(!str_detect(parameter, "zcwm")) %>% 

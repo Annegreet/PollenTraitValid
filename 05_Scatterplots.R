@@ -42,7 +42,7 @@ pollen_files <- list.files("RDS_files/") %>%
 
 pollen_lab <- pollen_files %>% 
   str_subset(paste(traits, collapse = "|")) %>% 
-  str_remove(., "03_zCWM_estimates_") %>% 
+  str_remove(., "03_CWM_estimates_") %>% 
   str_remove(., ".rds")
 
 veg_files <- list.files("RDS_files/") %>% 
@@ -52,7 +52,7 @@ veg_files <- list.files("RDS_files/") %>%
 
 veg_lab <- veg_files %>% 
   str_subset(paste(traits, collapse = "|")) %>% 
-  str_remove(., "03_zCWM_estimates_") %>% 
+  str_remove(., "03_CWM_estimates_") %>% 
   str_remove(., ".rds")
 
 folderpath.fun <- function(x)
@@ -67,13 +67,14 @@ dfCWM_pol <- pollen_files %>%
   mutate(correction = case_when(str_detect(label, pattern = "adjustedpercent_draw") ~ str_extract(label, pattern = "draw[0-9]*$"),
                                 str_detect(label, pattern = "adjustedpercent_mean") ~ "correction",
                                 str_detect(label, pattern = "percent") ~ "no correction",
+                                str_detect(label, pattern = "adjusted_helinger") ~ "helinger correction",
                                 TRUE ~ "no correction"),
          pollination = replace_na(pollination, "allpol"),
          growthform = replace_na(growthform, "allpft"),
          sitename = str_remove(sitename, "X")
   ) %>%
   # don't include cwm values with removed species (supplementary analysis)
-  filter(is.na(removed_spec)) %>% 
+  # filter(is.na(removed_spec)) %>% 
   dplyr::select(country, sitename, pollen_mean = Mean, 
                 pollen_sd = SD, trait, correction, pollination, growthform
   ) 
@@ -88,7 +89,8 @@ dfCWM_veg <- veg_files %>%
   bind_rows() %>% 
   as_tibble() %>% 
   mutate(country = str_extract(label, pattern = "Scotland|Switzerland"),
-         pollination = dplyr::recode(pollination, `no wind` = "not wind")) %>%
+         pollination = dplyr::recode(pollination, `no wind` = "not wind"),
+         notinpollen = if_else(str_detect(label, "notinpollen"), "notinpollen", "inpollen")) %>%
   # only Scottish data
   filter(country == "Scotland") %>% 
   # remove sites with to little cover of pft (5% or less) 
@@ -100,6 +102,7 @@ dfCWM_veg <- veg_files %>%
            (pollination == "not wind" & `not wind` >= 5)) %>% 
   dplyr::select(country, sitename, trait, veg_mean = Mean, veg_sd = SD,
                 growthform, pollination, taxres, zone) 
+
 saveRDS(dfCWM_pol,"RDS_files/04_CWM_estimates_pollen_Scotland.rds")
 saveRDS(dfCWM_veg,"RDS_files/04_CWM_estimates_vegetation_Scotland.rds")
 
@@ -109,23 +112,22 @@ dfCWM <- dfCWM_veg %>%
   # create treatment column
   mutate(treatment = case_when((pollination == "allpol" & growthform == "allpft" &
                                   taxres == "stand.spec") ~ "Correction factor",
-                               taxres %in% c("family","genus") ~ "Taxonomic resolution",
-                               (pollination != "allpol" & growthform == "allpft") ~ "Pollination mode",
-                               (growthform != "allpft" & pollination == "allpol") ~ "Growth form"),
+                               (taxres %in% c("family","genus") & correction == "no correction") ~ "Taxonomic resolution",
+                               (pollination != "allpol" & growthform == "allpft" & correction == "no correction") ~ "Pollination mode",
+                               (growthform != "allpft" & pollination == "allpol" & correction == "no correction") ~ "Growth form"),
          zone = str_remove(zone, pattern = "Scotland |Switzerland ")) %>%
   filter(country == "Scotland") 
 
 # Plot labels
-labs_trait <- c("Height (cm)(log)",
-                "Leaf area (cm2)(log)",
-                "SLA (mm2/mg)(log)")
-names(labs_trait) <- c("PlantHeight", "LA", "SLA")
+labs_trait <- as_labeller(c(PlantHeight = "Height~(cm)(log)",
+                            LA = "Leaf~area~(cm^{2})(log)",
+                            SLA ="SLA~(mm^{2}/mg)(log)"),
+                          default = label_parsed)
 labs_zone <- c(zoneA = "",
                zoneB = "",
                zoneC = "")
 
 # gapfilled data pollen, field data + gapfilled vegetation ----
-windows()
 cwm_range <- dfCWM %>%
   group_by(trait) %>%
   summarise(across(c("veg_mean","pollen_mean"), ~range(., na.rm = TRUE))) %>%
@@ -139,13 +141,16 @@ cwm_range <- dfCWM %>%
     dfCWM %>%
     filter(country == "Scotland") %>%
     filter(treatment == "Correction factor") %>%
-    ggplot(aes(x = pollen_mean, y = veg_mean, color = correction)) +
-    geom_point() +
+  ggplot(aes(x = pollen_mean, y = veg_mean, color = correction)) +
+    geom_point(size = 1) +
+    geom_abline(intercept = 0, slope = 1, linewidth = 0.1) +
     geom_blank(data = cwm_range) +
     scale_x_continuous("Pollen") +
     scale_y_continuous("Vegetation") +
-    scale_color_manual(values = c("darkorange", "purple"),
-                       label = c("Correction", "No correction")) +
+    scale_color_manual(values = c("no correction" = "darkorange","correction" = "purple", 
+                                  "helinger correction" = "cyan4"),
+                       label = c("no correction" = "No correction","correction" = "Pollen productivity estimates", 
+                                 "helinger correction" = "Helinger transformation")) +
     facet_wrap(zone~trait,
                scales = "free",
                labeller = labeller(trait = labs_trait,
@@ -165,12 +170,13 @@ ggsave("Figures/Scatter_correction.png", p_correction, height = 7, width = 7)
     filter(country == "Scotland") %>%
     filter(treatment == "Growth form" ) %>%
     ggplot(aes(x = pollen_mean, y = veg_mean, color = growthform)) +
-    geom_point() +
+    geom_point(size = 1) +
+    geom_abline(intercept = 0, slope = 1, linewidth = 0.1) +
     geom_blank(data = cwm_range) +
     scale_x_continuous("Pollen") +
     scale_y_continuous("Vegetation") +
-    scale_color_manual(values = c("darkorange", "purple"),
-                       labels = c("Non-woody", "Woody")) +
+    scale_color_manual(values = c(herb = "darkorange", trsh = "purple"),
+                       labels = c(herb = "Non-woody", trsh ="Woody")) +
     facet_wrap(zone~trait, scales = "free",
                labeller = labeller(trait = labs_trait,
                                    zone = labs_zone)) +
@@ -186,12 +192,13 @@ ggsave("Figures/Scatter_growthform.png", p_pft,
     dfCWM %>%
     filter(treatment == "Pollination mode") %>%
     ggplot(aes(x = pollen_mean, y = veg_mean, color = pollination)) +
-    geom_point() +
+    geom_point(size = 1) +
+    geom_abline(intercept = 0, slope = 1, linewidth = 0.1) +
     geom_blank(data = cwm_range) +
     scale_x_continuous("Pollen") +
     scale_y_continuous("Vegetation") +
-    scale_color_manual(values = c("darkorange", "purple"),
-                       labels = c("Not wind pollinated", "Wind pollinated")) +
+    scale_color_manual(values = c("not wind" = "darkorange", wind = "purple"),
+                       labels = c("not wind" = "Not wind pollinated", wind = "Wind pollinated")) +
     facet_wrap(zone~trait, scales = "free",
                labeller = labeller(trait = labs_trait,
                                    zone = labs_zone)) +
@@ -206,15 +213,15 @@ ggsave("Figures/Scatter_pollination.png", p_pol,
 (p_taxres <-
     dfCWM %>%
     filter(treatment == "Taxonomic resolution" |
-             (treatment == "Correction factor" &
-                correction == "no correction")) %>%
+             (treatment == "Correction factor" & correction == "no correction")) %>%
     ggplot(aes(x = pollen_mean, y = veg_mean, color = taxres)) +
-    geom_point() +
+    geom_point(size = 1) +
+    geom_abline(intercept = 0, slope = 1, linewidth = 0.1) +
     geom_blank(data = cwm_range) +
     scale_x_continuous("Pollen") +
     scale_y_continuous("Vegetation") +
-    scale_color_manual(values = c("darkorange", "purple","cyan4"),
-                       labels = c("Family", "Genus", "Species")) +
+    scale_color_manual(values = c(family = "darkorange", genus = "purple", stand.spec = "cyan4"),
+                       labels = c(family = "Family", genus = "Genus", stand.spec = "Species")) +
     facet_wrap(zone~trait, scales = "free",
                labeller = labeller(trait = labs_trait,
                                    zone = labs_zone)) +

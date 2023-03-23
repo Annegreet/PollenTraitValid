@@ -81,30 +81,3 @@ la <- sla_ldmc_raw %>%
   # convert to cm2
   mutate(LA = LA/100)
 saveRDS(la, "RDS_files/01_LA.rds")
-    
-## Summary table per pollentaxon
-bdm_traits <- readRDS("RDS_files/01_Traits_Swiss.rds")
-spec <- readRDS("RDS_files/02_PollenType_species.rds")
-
-sum_ph <- plantheight[,c("stand.spec", "PlantHeight")] %>% 
-  left_join(spec, by = c("species" = "stand.spec")) %>% 
-  filter(!is.na(pollentaxon)) %>% 
-  group_by(pollentaxon) %>% 
-  summarise(nspec = length(unique(stand.spec)),
-            nobs = n(),
-            LA = paste(round(mean(LA), 1), "+-", round(sd(LA), 1)))
-sum_la <- la %>% 
-  left_join(spec, by = c("species" = "stand.spec")) %>% 
-  filter(!is.na(pollentaxon)) %>% 
-  group_by(pollentaxon) %>% 
-  summarise(nspec = length(unique(stand.spec)),
-            nobs = n(),
-            LA = paste(round(mean(LA), 1), "+-", round(sd(LA), 1)))
-sum_sla <- sla %>% 
-  left_join(spec, by = c("species" = "stand.spec")) %>% 
-  filter(!is.na(pollentaxon)) %>% 
-  group_by(pollentaxon) %>% 
-  summarise(nspec = length(unique(stand.spec)),
-            nobs = n(),
-            SLA = paste(round(mean(SLA), 1), "+-", round(sd(SLA), 1)))
-

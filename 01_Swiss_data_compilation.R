@@ -13,8 +13,8 @@
 ## ---------------------------
 ##
 ## Notes:
-##   - missing plot numbers
-##   - missing trait data
+##   
+##   
 ##
 ## ---------------------------
 
@@ -24,10 +24,10 @@ if (!require(LCVP)) install.packages("LCVP")
 if (!require(lcvplants)) install.packages("lcvplants")
 
 # Load data
-bdm_meta <- read_csv("Data/bdm_metadata.csv") # contains plot codes, X/Y coordinates (on the Swiss grid), elevation, some basic climate data (MAT, TAP) and a habitat classification
-bdm_sp <- read_csv("Data/bdm_spp_comp.csv") # contains the relative abundances of all species (columns) in each plot/subplot (rows)
-bdm_sp_codes <- read_csv("Data/bdm_spp_codes.csv") # contains the species codes for species IDs in the traits and species composition datasets
-bdm_traits <- read_csv("Data/bdm_traits.csv") #  contains the dry mass, leaf area, SLA and height of plants in each plot/subplot 
+bdm_meta <- read.csv("Data/bdm_metadata.csv") # contains plot codes, X/Y coordinates (on the Swiss grid), elevation, some basic climate data (MAT, TAP) and a habitat classification
+bdm_sp <- read.csv("Data/bdm_spp_comp.csv") # contains the relative abundances of all species (columns) in each plot/subplot (rows)
+bdm_sp_codes <- read.csv("Data/bdm_spp_codes.csv") # contains the species codes for species IDs in the traits and species composition datasets
+bdm_traits <- read.csv("Data/bdm_traits.csv") #  contains the dry mass, leaf area, SLA and height of plants in each plot/subplot 
 bdm_pollen <- readRDS("RDS_files/01_Pollen_data_Swiss.rds")
 
 # extract plot ids 
@@ -113,7 +113,8 @@ bdm_sp <- bdm_sp %>%
                                                    "dead wood", "dead trunk",
                                                    "stump", "fungi", "rock",
                                                    "root", "other", "bareground") ~ "No plants",
-                           str_detect(species_code, pattern = "[:digit:]") ~ "Unindentified"
+                           (str_detect(species_code, pattern = "[:digit:]") & !is.na(binom)) ~ binom,
+                           (str_detect(species_code, pattern = "[:digit:]") & is.na(binom)) ~ "Unindentified"
                                 )
          ) %>% 
   # select relevant columns, rename
@@ -163,7 +164,7 @@ bdm_traits <- bdm_traits %>%
   dplyr::select(species_code, family = Family, genus = Genus, 
                 stand.spec, PFT = Functional_group,  
                 LA = area_mg, SLA = SLA_mm2_mg, PlantHeight = height_cm) %>% 
-  mutate(LA = LA * 100 #cm2 to mm2
+  mutate(LA = LA 
          )
 saveRDS(bdm_traits, "RDS_files/01_Traits_Swiss.rds")
 

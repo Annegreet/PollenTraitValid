@@ -29,7 +29,7 @@ if (!require(runjags)) install.packages("runjags")
 if (!require(rlang)) install.packages("rlang")
 
 ## Load data
-bdm_meta <- read_csv("Data/bdm_metadata.csv") %>% 
+bdm_meta <- read.csv("Data/bdm_metadata.csv") %>% 
   mutate(sitename = as.character(aID_STAO))
 # collate data
 traits <- c("LA","SLA","PlantHeight")
@@ -67,19 +67,14 @@ dfCWM_pol <- pollen_files %>%
                                 str_detect(label, pattern = "adjustedpercent_mean") ~ "correction",
                                 str_detect(label, pattern = "percent") ~ "no correction",
                                 TRUE ~ "no correction"),
+         sitename = str_remove(sitename, "X"),
          pollination = replace_na(pollination, "allpol"),
          growthform = replace_na(growthform, "allpft"),
-         sitename = str_remove(sitename, "X"),
          standardized = ifelse(str_detect(label, "zCWM"),"yes","no")
   ) %>% 
   dplyr::select(country, sitename, cwm_mean = Mean, 
-                cwm_sd = SD, trait, correction, pollination, growthform, standardized) %>% 
-  # create treatment column
-  mutate(treatment = case_when((pollination == "allpol" & growthform == "allpft") ~ "Correction factor",
-                               (pollination != "allpol" & growthform == "allpft") ~ "Pollination mode",
-                               (growthform != "allpft" & pollination == "allpol") ~ "Growth form")) %>% 
-  left_join(bdm_meta, by = "sitename") %>% 
-  filter(!sitename == "unknown")
+                cwm_sd = SD, trait, correction,  standardized, growthform) %>% 
+  left_join(bdm_meta, by = "sitename")
 
 dfCWM_veg <- veg_files %>% 
   folderpath.fun(.) %>% 
@@ -90,45 +85,44 @@ dfCWM_veg <- veg_files %>%
   bind_rows() %>% 
   as_tibble() %>% 
   mutate(country = str_extract(label, pattern = "Scotland|Switzerland"),
-         pollination = dplyr::recode(pollination, `no wind` = "not wind"),
          standardized = ifelse(str_detect(label, "zCWM"), "yes", "no")) %>% 
   dplyr::select(country, sitename, trait, cwm_mean = Mean, cwm_sd = SD,
-                growthform, pollination, taxres, zone, standardized) %>% 
+                zone, standardized, growthform) %>% 
   # create treatment column
-  mutate(treatment = case_when((pollination == "allpol" & growthform == "allpft" &
-                                  taxres == "stand.spec") ~ "Correction factor",
-                               taxres %in% c("family","genus") ~ "Taxonomic resolution",
-                               (pollination != "allpol" & growthform == "allpft") ~ "Pollination mode",
-                               (growthform != "allpft" & pollination == "allpol") ~ "Growth form"),
-         zone = str_remove(zone, pattern = "Scotland |Switzerland ")) %>% 
+  mutate(zone = str_remove(zone, pattern = "Scotland |Switzerland ")) %>% 
   left_join(bdm_meta, by = "sitename")
 
+sum_pft <- readRDS("RDS_files/01_Percentage_cover_pft.rds") %>% 
+  replace_na(list(`Non-Woody` = 0,
+                  Woody = 0,
+                  `not wind` = 0,
+                  wind = 0)) 
 # saveRDS(dfCWM_pol, "RDS_files/04_zCWM_estimates_pollen_Switzerland.rds")
 # saveRDS(dfCWM_veg, "RDS_files/04_zCWM_estimates_vegetation_Switzerland.rds")
 
 selectedtrait <- "PlantHeight"
 
 # Linear model ----
-lm_bay <- function(cwm, selectedhabitat,  selectedtrait, selecteddata){
+lm_bay <- function(cwm, selectedhabitat,  selectedpft, selectedtrait, selecteddata){
+  cwm <- cwm %>% 
+    filter(habitat01 %in% selectedhabitat) %>% 
+    filter(growthform == selectedpft) %>% 
+    filter(trait == selectedtrait) %>% 
+    left_join(sum_pft, by = c("sitename")) %>% 
+    filter((growthform == "allpft") |
+                    (growthform == "trsh" & Woody >= 5) |
+                    (growthform == "herb" & `Non-Woody` >= 5)) 
   # Model data
   CWM <- cwm %>% 
-    filter(habitat01 == selectedhabitat) %>% 
-    filter(trait == selectedtrait) %>% 
     filter(standardized == "no") %>% 
     pull(cwm_mean)
   zCWM <- cwm %>% 
-    filter(habitat01 == selectedhabitat) %>% 
-    filter(trait == selectedtrait) %>% 
     filter(standardized == "yes") %>% 
     pull(cwm_mean) 
   zSD <- cwm %>% 
-    filter(habitat01 == selectedhabitat) %>% 
-    filter(trait == selectedtrait) %>% 
     filter(standardized == "yes") %>% 
     pull(cwm_sd) 
   Elev <- cwm %>% 
-    filter(habitat01 == selectedhabitat) %>% 
-    filter(trait == selectedtrait) %>% 
     filter(standardized == "yes") %>% 
     pull(elevation)
   zElev <- (Elev - mean(Elev)) / sd(Elev) # standardize elevation
@@ -136,7 +130,8 @@ lm_bay <- function(cwm, selectedhabitat,  selectedtrait, selecteddata){
 
   # values to predict on
   maxmin <- cwm %>%
-    filter(habitat01 == selectedhabitat) %>% 
+    filter(habitat01 %in% selectedhabitat) %>% 
+    filter(growthform == selectedpft) %>%
     summarise(min = min(elevation), max = max(elevation))
   Elev_pred <- seq(from = as.numeric(maxmin[1,"min"]), to = as.numeric(maxmin[1,"max"]), by = 2)
   zElev_pred <- (Elev_pred - mean(Elev_pred)) / sd(Elev_pred)
@@ -190,13 +185,14 @@ lm_bay <- function(cwm, selectedhabitat,  selectedtrait, selecteddata){
     mutate(trait = selectedtrait,
            data = selecteddata)
   if (!all(results_summary[,"SSeff"] >= 10000))
-    warn(paste("Effective sample size potentially too low", selectedtrait, selecteddata, selectedhabitat))
+    warn(paste("Effective sample size potentially too low", selectedtrait, selecteddata, paste(selectedhabitat, collapse = "_")))
   
   # check model assumptions
   # Extract residuals and fitted estimates:
   residuals <- resid(results)
   fitted <- fitted(results)
-  png(paste0("Figures/CWM_elevation_model_check_", selectedtrait,"_", selecteddata,"_", selectedhabitat, ".png"))
+  png(paste0("Figures/CWM_elevation_model_check_", selectedtrait,"_", selecteddata,"_", paste(selectedhabitat, collapse = "_"),
+             "_",selectedpft, ".png"))
   par(mfrow = c(2,1))
   # Plot of residuals indicates a potential problem:
   qqnorm(residuals); qqline(residuals)
@@ -206,8 +202,8 @@ lm_bay <- function(cwm, selectedhabitat,  selectedtrait, selecteddata){
 
   # save convergence diagnostics
   plot(results, vars = c("zintercept", "zslope_elevation", "zsd", "df"), 
-       file = paste0("Convergence_diagnostics/04_Covergence_correlation_regression_", selectedtrait,
-                              "_", selecteddata,"_",selectedhabitat, ".pdf" ))
+       file = paste0("Convergence_diagnostics/04_Covergence_lm_", selectedtrait,
+                              "_", selecteddata,"_",paste(selectedhabitat, collapse = "_"),"_",selectedpft, ".pdf" ))
 
   # plot model results
   lm_mcmc <- as.mcmc(results)
@@ -224,7 +220,8 @@ lm_bay <- function(cwm, selectedhabitat,  selectedtrait, selecteddata){
   uncertainty_upper <- apply(lm_mcmc[, grep("CWM_pred", colnames(lm_mcmc), value = FALSE)], MARGIN = 2, quantile, prob = 0.95)
 
   df_pred <- tibble(elevation = Elev_pred,
-                    habitat01 = selectedhabitat,
+                    habitat01 = paste(selectedhabitat, collapse = "_"),
+                    growthform = selectedpft,
                     data = selecteddata,
                     cwm_mean = pred_cwm_mean,
                     credible_lower = credible_lower,
@@ -232,43 +229,66 @@ lm_bay <- function(cwm, selectedhabitat,  selectedtrait, selecteddata){
                     uncertainty_lower = uncertainty_lower,
                     uncertainty_upper = uncertainty_upper,
                     trait = selectedtrait)
-  saveRDS(df_pred, paste0("RDS_files/05_lm_switzerland_", selectedtrait, "_", selecteddata,"_",selectedhabitat, ".rds"))
-  
- (p <- ggplot(df_pred, aes(x = elevation, y = cwm_mean)) +
-    geom_ribbon(aes(ymin = credible_lower, ymax = credible_upper), alpha = 0.2, color = "grey") +
-    geom_ribbon(aes(ymin = uncertainty_lower, ymax = uncertainty_upper), alpha = 0.2, color = "grey") +
-    geom_line(color = "darkgreen") +
-    geom_point(data = cwm[cwm$trait == selectedtrait & cwm$standardized == "no" & cwm$habitat01 == selectedhabitat,], aes(x = elevation, y = cwm_mean)) +
-    scale_y_continuous("") + 
-    scale_x_continuous("Elevation (m)") +
-    theme_bw())
-  ggsave(paste0("Figures/CWM_elevation_", selectedtrait,"_", selecteddata,"_", selectedhabitat, ".png"),p)
+  saveRDS(df_pred, paste0("RDS_files/05_lm_switzerland_", selectedtrait, "_", selecteddata,"_",paste(selectedhabitat, collapse = "_"),
+                          "_",selectedpft,".rds"))
+
   }
 
-traits <- dfCWM_pol$trait %>% unique()
-cwm_veg <- dfCWM_veg %>% 
-  filter(treatment == "Correction factor") %>% 
-  mutate(trait = factor(trait, level = c("LA", "PlantHeight", "SLA"),
-                        labels = c(LA = "Leaf~area~(mm^{2})(log)",
-                                   PlantHeight = "Height~(cm)(log)",
-                                   SLA = "SLA~(mm^{2}/mg)(log)"))) 
-purrr::map(traits, ~lm_bay(cwm = cwm_veg, selectedtrait = .x, 
-                                                selectedhabitat = "forests", selecteddata = "Vegetation"))
-purrr::map(traits, ~lm_bay(cwm = cwm_veg, selectedtrait = .x, 
-                                      selectedhabitat = "grasslands", selecteddata = "Vegetation"))
 
+
+traits <- c("PlantHeight", "LA", "SLA")
+## vegetation 
+# all taxa
+cwm_veg <- dfCWM_veg %>% 
+  filter(growthform == "allpft")
+# purrr::map(traits, ~lm_bay(cwm = cwm_veg, 
+#                            selectedtrait = .x, 
+#                            selectedhabitat = "forests", 
+#                            selectedpft = "allpft",
+#                            selecteddata = "Vegetation"))
+# purrr::map(traits, ~lm_bay(cwm = cwm_veg, 
+#                            selectedtrait = .x, 
+#                            selectedhabitat = "grasslands",
+#                            selectedpft = "allpft",
+#                            selecteddata = "Vegetation"))
+# herb
+purrr::map(traits, ~lm_bay(cwm = dfCWM_veg, 
+                           selectedtrait = .x, 
+                           selectedhabitat = c("forests","grasslands"), 
+                           selectedpft = "herb",
+                           selecteddata = "Vegetation"))
+# trsh
+purrr::map(traits, ~lm_bay(cwm = dfCWM_veg, 
+                           selectedtrait = .x, 
+                           selectedhabitat = c("forests","grasslands"), 
+                           selectedpft = "trsh",
+                           selecteddata = "Vegetation"))
+
+## pollen
 cwm_pol <- dfCWM_pol %>% 
-  filter(treatment == "Correction factor") %>% 
   drop_na(elevation) %>% 
-  filter(correction == "correction") %>% 
-  mutate(trait = factor(trait, level = c("LA", "PlantHeight", "SLA"),
-                        labels = c(LA = "Leaf~area~(mm^{2})(log)",
-                                   PlantHeight = "Height~(cm)(log)",
-                                   SLA = "SLA~(mm^{2}/mg)(log)"))) 
-purrr::map(traits, ~lm_bay(cwm = cwm_pol, selectedtrait = .x, 
-                                                selectedhabitat = "forests", selecteddata = "Pollen"))
-purrr::map(traits, ~lm_bay(cwm = cwm_pol, selectedtrait = .x, 
-                                      selectedhabitat = "grasslands", selecteddata = "Pollen"))
+  filter(correction == "no correction") 
+# purrr::map(traits, ~lm_bay(cwm = cwm_pol, 
+#                            selectedtrait = .x, 
+#                            selectedpft = "allpft",
+#                            selectedhabitat = "forests", 
+#                            selecteddata = "Pollen"))
+# purrr::map(traits, ~lm_bay(cwm = cwm_pol, 
+#                            selectedtrait = .x, 
+#                            selectedpft = "allpft",
+#                            selectedhabitat = "grasslands", 
+#                            selecteddata = "Pollen"))
+purrr::map(traits, ~lm_bay(cwm = cwm_pol, 
+                           selectedtrait = .x, 
+                           selectedpft = "herb",
+                           selectedhabitat = c("forests", "grasslands"), 
+                           selecteddata = "Pollen"))
+purrr::map(traits, ~lm_bay(cwm = cwm_pol, 
+                           selectedtrait = .x, 
+                           selectedpft = "trsh",
+                           selectedhabitat = c("forests", "grasslands"), 
+                           selecteddata = "Pollen"))
+
 
 # Plotting ----
 # load in lm results
@@ -281,24 +301,21 @@ lm_values <- lm_files %>%
 
 # plot model results
 cwm_range <- lm_values %>% 
-  mutate(trait = factor(trait, level = c("LA", "PlantHeight", "SLA"),
-                        labels = c(LA = "Leaf~area~(mm^{2})(log)",
-                                   PlantHeight = "Height~(cm)(log)",
-                                   SLA = "SLA~(mm^{2}/mg)(log)"))) %>% 
   group_by(trait) %>%
   summarise(across(c("uncertainty_lower","uncertainty_upper"), ~range(., na.rm = T))) %>%
   transmute(max_lim = max(uncertainty_upper, na.rm = T),
             min_lim = min(uncertainty_lower, na.rm = T)) %>%
   pivot_longer(-trait, names_to = "limits", values_to = "cwm_mean") %>%
-  mutate(elevation = rep(c(400,2600,400,2600)), habitat01 = NA) 
+  mutate(elevation = rep(c(400,2600,400,2600)), habitat01 = NA, growthform = NA) 
  
+labs_trait <- as_labeller(c(PlantHeight = "Height~(cm)(log)",
+                            LA = "Leaf~area~(cm^{2})(log)",
+                            SLA ="SLA~(mm^{2}/mg)(log)"),
+                          default = label_parsed)
 
 (p <- lm_values %>% 
     filter(data == "Vegetation" ) %>% 
-    mutate(trait = factor(trait, level = c("LA", "PlantHeight", "SLA"),
-                          labels = c(LA = "Leaf~area~(mm^{2})(log)",
-                                            PlantHeight = "Height~(cm)(log)",
-                                            SLA = "SLA~(mm^{2}/mg)(log)"))) %>% 
+    filter(is.na(growthform)|growthform == "allpft") %>% 
     ggplot(aes(x = elevation, y = cwm_mean, colour = habitat01)) +
     geom_ribbon(aes(ymin = uncertainty_lower, ymax = uncertainty_upper, fill = habitat01), 
                 alpha = 0.2, colour = NA) +
@@ -314,7 +331,8 @@ cwm_range <- lm_values %>%
     scale_y_continuous("") + 
     scale_x_continuous("Elevation (m.s.l)", limits = c(400,2600)) +
     facet_wrap(~trait, scales = "free",
-               labeller = label_parsed) + 
+               labeller = labs_trait
+               ) + 
     theme_bw() +
     theme(legend.position =  "bottom",
           strip.background = element_blank(),
@@ -325,10 +343,7 @@ ggsave("Figures/CWM_elevation_vegetaion.png", p, width = 7, height = 4)
 
 (p <- lm_values %>% 
     filter(data == "Pollen" ) %>% 
-    mutate(trait = factor(trait, level = c("LA", "PlantHeight", "SLA"),
-                          labels = c(LA = "Leaf~area~(mm^{2})(log)",
-                                     PlantHeight = "Height~(cm)(log)",
-                                     SLA = "SLA~(mm^{2}/mg)(log)"))) %>% 
+    filter(is.na(growthform)|growthform == "allpft") %>% 
     ggplot(aes(x = elevation, y = cwm_mean, colour = habitat01)) +
     geom_ribbon(aes(ymin = uncertainty_lower, ymax = uncertainty_upper, fill = habitat01), 
                 alpha = 0.2, colour = NA) +
@@ -344,7 +359,7 @@ ggsave("Figures/CWM_elevation_vegetaion.png", p, width = 7, height = 4)
     scale_y_continuous("") + 
     scale_x_continuous("Elevation (m.s.l)", limits = c(400,2600)) +
     facet_wrap(~trait, scales = "free",
-               labeller = label_parsed) + 
+               labeller = labs_trait) + 
     theme_bw() +
     theme(legend.position =  "bottom",
           strip.background = element_blank(),
@@ -354,3 +369,62 @@ ggsave("Figures/CWM_elevation_vegetaion.png", p, width = 7, height = 4)
 ggsave("Figures/CWM_elevation_pollen.png", p, width = 7, height = 4)
 
 
+(p <- lm_values %>% 
+    filter(data == "Vegetation" ) %>% 
+    filter(growthform %in% c("herb", "trsh")) %>% 
+    ggplot(aes(x = elevation, y = cwm_mean, colour = growthform)) +
+    geom_ribbon(aes(ymin = uncertainty_lower, ymax = uncertainty_upper, fill = growthform), 
+                alpha = 0.2, colour = NA) +
+    geom_ribbon(aes(ymin = credible_lower, ymax = credible_upper, fill = growthform), 
+                alpha = 0.2, colour = NA) +
+    geom_line() +
+    geom_point(data = dfCWM_veg[dfCWM_veg$standardized == "no" & 
+                                  dfCWM_veg$growthform %in% c("trsh","herb"),], 
+               aes(x = elevation, y = cwm_mean), size = 0.75) +
+    geom_blank(data = cwm_range) +
+    scale_color_manual(values = c(trsh = "darkorange", herb = "purple"),
+                       label = c(trsh = "Woody", herb = "Non-woody")) + 
+    scale_fill_manual(values = c(trsh = "darkorange", herb = "purple"),
+                      label = c(trsh = "Woody", herb = "Non-woody")) + 
+    scale_y_continuous("") + 
+    scale_x_continuous("Elevation (m.s.l)", limits = c(400,2600)) +
+    facet_wrap(~trait, scales = "free",
+               labeller = labs_trait
+    ) + 
+    theme_bw() +
+    theme(legend.position =  "bottom",
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          legend.title = element_blank()) +
+    guides(fill = "none"))
+ggsave("Figures/CWM_elevation_vegetation_pft.png", p, width = 7, height = 4)
+
+(p <- lm_values %>% 
+    filter(data == "Pollen" ) %>% 
+    filter(growthform %in% c("herb", "trsh")) %>% 
+    ggplot(aes(x = elevation, y = cwm_mean, colour = growthform)) +
+    geom_ribbon(aes(ymin = uncertainty_lower, ymax = uncertainty_upper, fill = growthform), 
+                alpha = 0.2, colour = NA) +
+    geom_ribbon(aes(ymin = credible_lower, ymax = credible_upper, fill = growthform), 
+                alpha = 0.2, colour = NA) +
+    geom_line() +
+    geom_point(data = cwm_pol[cwm_pol$standardized == "no" & 
+                                cwm_pol$growthform %in% c("trsh","herb"),], 
+               aes(x = elevation, y = cwm_mean), size = 0.75) +
+    geom_blank(data = cwm_range) +
+    scale_color_manual(values = c(trsh = "darkorange", herb = "purple"),
+                       label = c(trsh = "Woody", herb = "Non-woody")) + 
+    scale_fill_manual(values = c(trsh = "darkorange", herb = "purple"),
+                      label = c(trsh = "Woody", herb = "Non-woody")) + 
+    scale_y_continuous("") + 
+    scale_x_continuous("Elevation (m.s.l)", limits = c(400,2600)) +
+    facet_wrap(~trait, scales = "free",
+               labeller = labs_trait
+    ) + 
+    theme_bw() +
+    theme(legend.position =  "bottom",
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          legend.title = element_blank()) +
+    guides(fill = "none"))
+ggsave("Figures/CWM_elevation_pollen_pft.png", p, width = 7, height = 4)

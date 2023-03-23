@@ -539,6 +539,4 @@ veg_cover_bc <- veg_cover_bc %>%
   filter(!is.na(stand.spec))
 
 saveRDS(veg_cover_bc, "RDS_files/01_Species_abundance_bc.rds")
-saveRDS(spec_a, "RDS_files/01_Species_abundance_a.rds")
 ```
-
