@@ -653,7 +653,9 @@ cwm_veg_remove <- function(selectedabun, selectedtrait, removedspec){
 }
 
 # CWM pollen no subset ----
-cwm_pol <- function(selectedtrait, selectedcountry, selectedabun, taxtrait = FALSE){
+cwm_pol <- function(selectedtrait, selectedcountry, selectedabun, 
+                    taxtrait = FALSE, # when TRUE save taxon level trait values
+                    reducesp = FALSE){ # when FALSE use species list from field survey, otherwise use GBIF list
   trait <- dfTRAIT %>% 
     filter(country == selectedcountry) %>% 
     # drop NA's and 0's
