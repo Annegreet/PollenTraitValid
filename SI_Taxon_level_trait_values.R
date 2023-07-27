@@ -37,9 +37,10 @@ dfESTIM <- files %>%
                 mutate(label = .y)) %>% 
   bind_rows() %>% 
   as_tibble() %>% 
-  mutate(taxon = ifelse(str_detect(label, "Species"), "vegetation", "pollen"),
+  mutate(taxon = ifelse(str_detect(label, "zoneB"), "vegetation", "pollen"),
          trait = str_extract(label, pattern = paste(traits, collapse = "|")),
-         country = str_extract(label, pattern = "Scotland|Switzerland"))
+         country = str_extract(label, pattern = "Scotland|Switzerland"),
+         reduced_list = ifelse(str_detect(label, pattern = "field"), "field", "GBIF"))
 
 dfPOL <- readRDS("RDS_files/01_Pollen_data_Scot.rds")
 dfTRAIT <- readRDS("RDS_files/02_Gapfilled_traits_pollen.rds") %>% 
@@ -51,71 +52,101 @@ pollentax <- dfPOL %>%
   pull(pollentaxon) %>% 
   unique()
 
-
-
+pollen_lab <- as_labeller(c("Betula" = "italic(Betula)",
+                            "Cyperaceae" = "Cyperaceae",
+                            "Ericales (tetrad)" = "Ericales~(tetrad)",
+                            "Pinus" = "italic(Pinus)",
+                            "Poaceae" = "Poaceae",
+                            "Pteridophyte" = "Pteridophyte"), default = label_parsed)
 # Pollen ----
 ## LA
 estimated <- dfESTIM %>% 
   filter(trait == "LA") %>% 
   filter(taxon == "pollen") %>% 
   filter(country == "Scotland") %>% 
-  group_split(tax)
-names(estimated) <- dfESTIM %>% filter(taxon == "pollen") %>% filter(country == "Scotland") %>% pull(tax) %>% unique
+  group_split(tax, reduced_list)
+names(estimated) <- dfESTIM %>% filter(taxon == "pollen") %>% filter(country == "Scotland") %>% 
+  mutate(label = paste(.$tax, .$reduced_list, sep = "_")) %>% pull(label) %>% unique
 
 df <- estimated %>% 
   purrr::map_dfr(~rnorm(20000, mean = .$mean.tax, sd = .$sd.tax)) %>% 
-  pivot_longer(everything(), names_to = "pollentaxon", values_to = "LA")
+  pivot_longer(everything(), names_to = "pollentaxon", values_to = "LA") %>% 
+  separate(pollentaxon, into = c("pollentaxon", "sp_list"), sep = "_")
 
-(p <- ggplot(data = df[df$pollentaxon %in% pollentax,], aes(x = LA)) +
-  geom_density() +
-  geom_histogram(data = dfTRAIT[dfTRAIT$pollentaxon %in% pollentax,],
-                 aes(x = log(LA), y = ..density..)) +
-  xlab("LA (cm2)(log)") +
-  facet_wrap(~pollentaxon, scales = "free") + 
-  theme_bw())
-ggsave("Figures/Trait_values_pollen_LA.png", p)
+(p <- ggplot(data = df[df$pollentaxon %in% pollentax,], aes(x = LA, fill = sp_list, color = sp_list)) +
+  geom_density(alpha = 0.5) +
+  scale_fill_manual("", values = c("darkorange", "purple"), labels = c("field" = "Field species list",
+                                                                       "GBIF" = "GBIF species list")) +
+  scale_color_manual("", values = c("darkorange", "purple"), labels = c("field" = "Field species list",
+                                                                         "GBIF" = "GBIF species list")) +
+  xlab(parse(text = "Leaf~area~(cm^2)(log)")) +
+  facet_wrap(~pollentaxon, scales = "free_y", labeller = pollen_lab) + 
+  theme_bw() +
+  theme(text = element_text(size = 10),
+          strip.background = element_rect(fill = "white"),
+        legend.position = "bottom")
+)
+ggsave("Figures/Trait_values_pollen_LA.png", p, height = 4, width = 7)
 
 ## SLA
 estimated <- dfESTIM %>% 
   filter(trait == "SLA") %>% 
   filter(taxon == "pollen") %>% 
   filter(country == "Scotland") %>% 
-  group_split(tax)
-names(estimated) <- dfESTIM %>% filter(taxon == "pollen") %>% filter(country == "Scotland") %>% pull(tax) %>% unique
+  group_split(tax, reduced_list)
+names(estimated) <- dfESTIM %>% filter(taxon == "pollen") %>% filter(country == "Scotland") %>% 
+  mutate(label = paste(.$tax, .$reduced_list, sep = "_")) %>% pull(label) %>% unique
 
 df <- estimated %>% 
   purrr::map_dfr(~rnorm(20000, mean = .$mean.tax, sd = .$sd.tax)) %>% 
-  pivot_longer(everything(), names_to = "pollentaxon", values_to = "SLA")
+  pivot_longer(everything(), names_to = "pollentaxon", values_to = "SLA") %>% 
+  separate(pollentaxon, into = c("pollentaxon", "sp_list"), sep = "_")
 
-(p <- ggplot(data = df[df$pollentaxon %in% pollentax,], aes(x = SLA)) +
-  geom_density() +
-  geom_histogram(data = dfTRAIT[dfTRAIT$pollentaxon %in% pollentax,],
-                 aes(x = log(SLA), y = ..density..)) +
-  xlab("SLA (mm2/mg)(log)") +
-  facet_wrap(~pollentaxon, scales = "free") +
-  theme_bw())
-ggsave("Figures/Trait_values_pollen_SLA.png", p)
+(p <- ggplot(data = df[df$pollentaxon %in% pollentax,], aes(x = SLA, fill = sp_list, color = sp_list)) +
+    geom_density(alpha = 0.5) +
+    scale_fill_manual("", values = c("darkorange", "purple"), labels = c("field" = "Field species list",
+                                                                         "GBIF" = "GBIF species list")) +
+    scale_color_manual("", values = c("darkorange", "purple"), labels = c("field" = "Field species list",
+                                                                          "GBIF" = "GBIF species list")) +
+    xlab(parse(text = "SLA~(mm^2/mg)(log)")) +
+    facet_wrap(~pollentaxon, scales = "free_y", labeller = pollen_lab) + 
+    theme_bw() +
+    theme(text = element_text(size = 10),
+          strip.background = element_rect(fill = "white"),
+          legend.position = "bottom")
+)
+
+ggsave("Figures/Trait_values_pollen_SLA.png", p, height = 4, width = 7)
 
 ## Plant Height
 estimated <- dfESTIM %>% 
   filter(trait == "PlantHeight") %>% 
   filter(taxon == "pollen") %>% 
   filter(country == "Scotland") %>% 
-  group_split(tax)
-names(estimated) <- dfESTIM %>% filter(taxon == "pollen") %>% filter(country == "Scotland") %>% pull(tax) %>% unique
+  group_split(tax, reduced_list)
+names(estimated) <- dfESTIM %>% filter(taxon == "pollen") %>% filter(country == "Scotland") %>% 
+  mutate(label = paste(.$tax, .$reduced_list, sep = "_")) %>% pull(label) %>% unique
 
 df <- estimated %>% 
   purrr::map_dfr(~rnorm(20000, mean = .$mean.tax, sd = .$sd.tax)) %>% 
-  pivot_longer(everything(), names_to = "pollentaxon", values_to = "PlantHeight")
+  pivot_longer(everything(), names_to = "pollentaxon", values_to = "PlantHeight") %>% 
+  separate(pollentaxon, into = c("pollentaxon", "sp_list"), sep = "_")
 
-(p <- ggplot(data = df[df$pollentaxon %in% pollentax,], aes(x = PlantHeight)) +
-  geom_density() +
-  geom_histogram(data = dfTRAIT[dfTRAIT$pollentaxon %in% pollentax,],
-                 aes(x = log(PlantHeight), y = ..density..)) +
-  xlab("Height (cm)(log)") +
-  facet_wrap(~pollentaxon, scales = "free") +
-  theme_bw())
-ggsave("Figures/Trait_values_pollen_PH.png", p)
+(p <- ggplot(data = df[df$pollentaxon %in% pollentax,], aes(x = PlantHeight, fill = sp_list, color = sp_list)) +
+    geom_density(alpha = 0.5) +
+    scale_fill_manual("", values = c("darkorange", "purple"), labels = c("field" = "Field species list",
+                                                                         "GBIF" = "GBIF species list")) +
+    scale_color_manual("", values = c("darkorange", "purple"), labels = c("field" = "Field species list",
+                                                                          "GBIF" = "GBIF species list")) +
+    xlab(parse(text = "Heigh (cm)(log)")) +
+    facet_wrap(~pollentaxon, scales = "free_y", labeller = pollen_lab) + 
+    theme_bw() +
+    theme(text = element_text(size = 10),
+          strip.background = element_rect(fill = "white"),
+          legend.position = "bottom")
+)
+
+ggsave("Figures/Trait_values_pollen_PH.png", p, height = 4, width = 7)
 
 
 # Vegetation ----
