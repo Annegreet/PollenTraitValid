@@ -31,8 +31,8 @@ if (!require(furrr)) install.packages("furrr")
 source("cwm_functions.R")
 
 ## Load and prepare data -----
-# Trait data ----
-# Scotland ----
+# Trait data 
+# Scotland
 plantheight <- readRDS("RDS_files/01_PlantHeight.rds") %>% 
   ungroup() 
 sla <- readRDS("RDS_files/01_SLA.rds") %>% 
@@ -409,4 +409,19 @@ furrr::future_map(traits,
                                 selectedpolmode = allpol,
                                 selectedpft = herb),
                   .options = furrr_options(seed = TRUE))
+furrr::future_map(traits,
+                  ~cwm_veg_swiz(selectedabun = "zoneA",
+                                selectedtrait = .,
+                                selectedtaxres = "stand.spec",
+                                selectedpolmode = wind,
+                                selectedpft = allpft),
+                  .options = furrr_options(seed = TRUE))
+furrr::future_map(traits,
+                  ~cwm_veg_swiz(selectedabun = "zoneA",
+                                selectedtrait = .,
+                                selectedtaxres = "stand.spec",
+                                selectedpolmode = nowind,
+                                selectedpft = allpft),
+                  .options = furrr_options(seed = TRUE))
+
 }

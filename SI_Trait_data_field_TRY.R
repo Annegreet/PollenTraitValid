@@ -104,7 +104,7 @@ ggsave("Figures/PlantHeight_trait_values.png", ph_plot, height = 5, width = 5)
   geom_boxplot(outlier.size =  0.1) +
   # scales and labelling
   scale_x_discrete("") +
-  scale_y_continuous(expression(paste("Leaf area (",mm^2, ")(log)"))) + 
+  scale_y_continuous(expression(paste("Leaf area (",cm^2, ")(log)"))) + 
   scale_fill_manual(values = c("darkorange", "purple", "cyan4")) +
   labs(fill = "Trait source") +
   coord_flip() +

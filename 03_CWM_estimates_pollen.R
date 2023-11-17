@@ -30,19 +30,21 @@ if (!require(furrr)) install.packages("furrr")
 source("cwm_functions.R")
 
 ## Load and prepare data -----
-# Trait data ---- 
+# Trait data  
 dfTRAIT <- readRDS("RDS_files/02_Gapfilled_traits_pollen.rds")
 
-# Pollen data ----
+# Pollen data 
 dfPOL_Scot <- readRDS("RDS_files/01_pollen_data_Scot.rds")
 dfPOL_Swiss <- readRDS("RDS_files/01_pollen_data_Swiss.rds")
 dfPOL <- bind_rows("Scotland" = dfPOL_Scot, "Switzerland" =
                      dfPOL_Swiss, .id = "country") %>% 
   ungroup()
 
-selectedcountry <- "Scotland"
-selectedtrait <- "PlantHeight"
-selectedabun <- str_subset(colnames(dfPOL), "percent")[1]
+
+# Params 
+# selectedcountry <- "Scotland"
+# selectedtrait <- "PlantHeight"
+# selectedabun <- str_subset(colnames(dfPOL), "percent")[1]
 
 normaltraits <- c("PlantHeight","SLA","LA")
 
@@ -52,31 +54,31 @@ plan(multisession)
 # No subset ----
 if (0) {
 
-# furrr::future_map(normaltraits,
-#                    ~cwm_pol(selectedtrait = .x,
-#                             selectedcountry = "Scotland",
-#                             selectedabun = "percent",
-#                             taxtrait = TRUE
-#                             ),
-#                   .options = furrr_options(seed = TRUE))
-# furrr::future_map(normaltraits,
-#                    ~cwm_pol(selectedtrait = .x,
-#                             selectedcountry = "Switzerland",
-#                             selectedabun = "percent",
-#                             taxtrait = TRUE
-#                             ),
-#                   .options = furrr_options(seed = TRUE))
-  # furrr::future_map(normaltraits,
-  #                   ~cwm_pol(selectedtrait = .x,
-  #                               selectedcountry = "Scotland",
-  #                               selectedabun = "adjustedpercent_mean"),
-  #                   .options = furrr_options(seed = TRUE))
-  # furrr::future_map(normaltraits,
-  #                   ~cwm_pol(selectedtrait = .x,
-  #                            selectedcountry = "Scotland",
-  #                            selectedabun = "adjusted_helinger"),
-  #                   .options = furrr_options(seed = TRUE))
-  purrr::map(normaltraits,
+furrr::future_map(normaltraits,
+                   ~cwm_pol(selectedtrait = .x,
+                            selectedcountry = "Scotland",
+                            selectedabun = "percent",
+                            taxtrait = TRUE
+                            ),
+                  .options = furrr_options(seed = TRUE))
+furrr::future_map(normaltraits,
+                   ~cwm_pol(selectedtrait = .x,
+                            selectedcountry = "Switzerland",
+                            selectedabun = "percent",
+                            taxtrait = TRUE
+                            ),
+                  .options = furrr_options(seed = TRUE))
+furrr::future_map(normaltraits,
+                  ~cwm_pol(selectedtrait = .x,
+                              selectedcountry = "Scotland",
+                              selectedabun = "adjustedpercent_mean"),
+                  .options = furrr_options(seed = TRUE))
+furrr::future_map(normaltraits,
+                  ~cwm_pol(selectedtrait = .x,
+                           selectedcountry = "Scotland",
+                           selectedabun = "adjusted_helinger"),
+                  .options = furrr_options(seed = TRUE))
+furrr::future_map(normaltraits,
                     ~cwm_pol(selectedtrait = .x,
                                 selectedcountry = "Switzerland",
                                 selectedabun = "adjustedpercent_mean"))
@@ -148,6 +150,18 @@ purrr::map(normaltraits,
                                selectedcountry = "Scotland",
                                selectedpolmode = "not wind",
                                selectedabun = "adjustedpercent_mean"))
+
+purrr::map(normaltraits,
+           ~cwm_pol_pol(selectedtrait = .x,
+                        selectedcountry = "Switzerland",
+                        selectedpolmode = "wind",
+                        selectedabun = "percent"))
+purrr::map(normaltraits,
+           ~cwm_pol_pol(selectedtrait = .x,
+                        selectedcountry = "Switzerland",
+                        selectedpolmode = "not wind",
+                        selectedabun = "percent"),
+           .options = furrr_options(seed = TRUE))
 
 }
 

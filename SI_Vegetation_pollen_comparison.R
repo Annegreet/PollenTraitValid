@@ -20,9 +20,8 @@
 
 ## Load packages
 if (!require(tidyverse)) install.packages("tidyverse")
-if (!require(rioja)) install.packages("rioja") # plot pollen diagrams
 if (!require(ggrepel)) install.packages("ggrepel") # repel point labels
-if (!require(readxl)) install.packages("readxl") # repel point labels
+if (!require(readxl)) install.packages("readxl") 
 
 ## Prepare data ----
 dfPOL_Scot <- readRDS("RDS_files/01_Pollen_data_Scot.rds")
@@ -110,14 +109,13 @@ pol_veg <- veg %>%
    
 (p <- pol_veg %>% 
   group_by(pollentaxon) %>% 
-  filter(any(pol > 2)) %>% 
+  filter(any(pol > 5)) %>% 
   ggplot(aes(x = veg, y = pol)) +
   geom_point(aes(col = pollination)) +
   # annotations
   geom_abline(intercept = 0, slope = 1) + 
   geom_text_repel(aes(label = pollentaxon),
                   max.overlaps = 50, size = 3, segment.color = '#999999') +
-  ggtitle("Pollen percentages") +
   scale_x_continuous("Mean vegetation basal area (%)", limits = c(0,100)) +
   scale_y_continuous("Mean pollen abundance (%)", limits = c(0,100)) + 
   scale_color_manual(name = "Pollination mode", 
@@ -126,9 +124,11 @@ pol_veg <- veg %>%
   # Faceting
   facet_wrap(~zone, labeller = labeller(zone = zone_lab)) +
   # Theme
-  theme_bw(base_size = 10) +
-  theme(legend.position = "bottom",
-        legend.title = element_blank()) )
+  theme_bw() +
+  theme(text = element_text(size = 10),
+        strip.background = element_rect(fill = "white"),
+        legend.position = "bottom"
+  ))
 ggsave("Figures/Pollen_rep_percent.png", p, height = 7, width = 7)
 
 
@@ -139,7 +139,7 @@ pol_veg_adj <- veg %>%
   left_join(polmode, by = "pollentaxon") %>% 
   filter(!is.na(pollination)) %>% 
   group_by(pollentaxon) %>% 
-  filter(any(pol > 3)) 
+  filter(any(pol > 5)) 
 
 pol_veg_draw <- veg %>% 
   group_by(country, zone, pollentaxon) %>% 
@@ -161,7 +161,6 @@ pol_veg_draw <- veg %>%
   geom_abline(intercept = 0, slope = 1) + 
   geom_text_repel(data = pol_veg_adj, aes(x = veg, y = pol, label = pollentaxon),
                   max.overlaps = 50, size = 3, segment.color = '#999999') +
-  ggtitle("Adjusted pollen percentages") +
   scale_x_continuous("Mean vegetation basal area (%)", limits = c(0,100)) +
   scale_y_continuous("Mean pollen abundance (%)", limits = c(0,100)) + 
   scale_color_manual(name = "Pollination mode", 
@@ -170,9 +169,11 @@ pol_veg_draw <- veg %>%
   # Faceting
   facet_wrap(~zone, labeller = labeller(zone = zone_lab)) +
   # Theme
-  theme_bw(base_size = 10) +
-  theme(legend.position = "bottom",
-        legend.title = element_blank()))
+  theme_bw() +
+  theme(text = element_text(size = 10),
+          strip.background = element_rect(fill = "white"),
+          legend.position = "bottom"
+    ))
 
 ggsave("Figures/Pollen_rep_adjustedpercent.png", p2, height = 7, width = 7)
 

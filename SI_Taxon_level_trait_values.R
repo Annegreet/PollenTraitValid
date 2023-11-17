@@ -49,8 +49,9 @@ dfTRAIT <- readRDS("RDS_files/02_Gapfilled_traits_pollen.rds") %>%
 pollentax <- dfPOL %>% 
   group_by(pollentaxon) %>% 
   filter(any(percent > 0.08)) %>% 
-  pull(pollentaxon) %>% 
-  unique()
+  summarise(percent = mean(percent)) %>% 
+  arrange(desc(percent)) %>% 
+  pull(pollentaxon) 
 
 pollen_lab <- as_labeller(c("Betula" = "italic(Betula)",
                             "Cyperaceae" = "Cyperaceae",
@@ -80,13 +81,13 @@ df <- estimated %>%
   scale_color_manual("", values = c("darkorange", "purple"), labels = c("field" = "Field species list",
                                                                          "GBIF" = "GBIF species list")) +
   xlab(parse(text = "Leaf~area~(cm^2)(log)")) +
-  facet_wrap(~pollentaxon, scales = "free_y", labeller = pollen_lab) + 
+  facet_grid(factor(pollentaxon, levels = pollentax)~., scales = "free_y", labeller = pollen_lab) + 
   theme_bw() +
   theme(text = element_text(size = 10),
           strip.background = element_rect(fill = "white"),
         legend.position = "bottom")
 )
-ggsave("Figures/Trait_values_pollen_LA.png", p, height = 4, width = 7)
+ggsave("Figures/Trait_values_pollen_LA.png", p, height = 7, width = 4)
 
 ## SLA
 estimated <- dfESTIM %>% 
@@ -109,14 +110,14 @@ df <- estimated %>%
     scale_color_manual("", values = c("darkorange", "purple"), labels = c("field" = "Field species list",
                                                                           "GBIF" = "GBIF species list")) +
     xlab(parse(text = "SLA~(mm^2/mg)(log)")) +
-    facet_wrap(~pollentaxon, scales = "free_y", labeller = pollen_lab) + 
+    facet_grid(factor(pollentaxon, levels = pollentax)~., scales = "free_y", labeller = pollen_lab) + 
     theme_bw() +
     theme(text = element_text(size = 10),
           strip.background = element_rect(fill = "white"),
           legend.position = "bottom")
 )
 
-ggsave("Figures/Trait_values_pollen_SLA.png", p, height = 4, width = 7)
+ggsave("Figures/Trait_values_pollen_SLA.png", p, height = 7, width = 4)
 
 ## Plant Height
 estimated <- dfESTIM %>% 
@@ -139,14 +140,14 @@ df <- estimated %>%
     scale_color_manual("", values = c("darkorange", "purple"), labels = c("field" = "Field species list",
                                                                           "GBIF" = "GBIF species list")) +
     xlab(parse(text = "Heigh (cm)(log)")) +
-    facet_wrap(~pollentaxon, scales = "free_y", labeller = pollen_lab) + 
+    facet_grid(factor(pollentaxon, levels = pollentax)~., scales = "free_y", labeller = pollen_lab) + 
     theme_bw() +
     theme(text = element_text(size = 10),
           strip.background = element_rect(fill = "white"),
           legend.position = "bottom")
 )
 
-ggsave("Figures/Trait_values_pollen_PH.png", p, height = 4, width = 7)
+ggsave("Figures/Trait_values_pollen_PH.png", p, height = 7, width = 4)
 
 
 # Vegetation ----

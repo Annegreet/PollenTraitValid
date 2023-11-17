@@ -654,10 +654,10 @@ cwm_veg_remove <- function(selectedabun, selectedtrait, removedspec){
 
 # CWM pollen no subset ----
 cwm_pol <- function(selectedtrait, selectedcountry, selectedabun, 
-                    taxtrait = FALSE, # when TRUE save taxon level trait values
-                    reducesp = FALSE){ # when FALSE use species list from field survey, otherwise use GBIF list
+                    taxtrait = FALSE){ # when TRUE save taxon level trait values
   trait <- dfTRAIT %>% 
     filter(country == selectedcountry) %>% 
+    {if(reducesp) filter()}
     # drop NA's and 0's
     dplyr::select(pollentaxon, all_of(selectedtrait)) %>% 
     mutate(across(where(is.double), ~na_if(.,0))) %>% 
@@ -1109,4 +1109,106 @@ cwm_pol_remove <- function(selectedtrait, selectedcountry, selectedabun,
                     removed_spec = removedspec)
   saveRDS(res, paste0("RDS_files/03_CWM_estimates_pollen_", selectedcountry,"_",
                       selectedtrait, "_", selectedabun,"_", removedspec, ".rds"))
+}
+
+# CWM pollen species list of the field ----
+cwm_pol_field <- function(selectedtrait, selectedcountry, selectedabun, taxtrait = TRUE,
+                           fieldspec){
+  trait <- dfTRAIT %>% 
+    filter(country == selectedcountry) %>% 
+    filter(stand.spec %in% fieldspec) %>% 
+    # drop NA's and 0's
+    dplyr::select(pollentaxon, all_of(selectedtrait)) %>% 
+    mutate(across(where(is.double), ~na_if(.,0))) %>% 
+    drop_na() %>% 
+    # Sort alphabetically
+    arrange(pollentaxon) %>% 
+    # check number of observations
+    group_by(pollentaxon) %>% 
+    mutate(ntrait = n()) %>% 
+    filter(ntrait >= 10)
+  
+  pol <- dfPOL %>% 
+    # select country
+    filter(country == selectedcountry) %>%
+    dplyr::select(sitename, pollentaxon, pollen_abun = all_of(selectedabun)) %>% 
+    drop_na()
+  
+  # save pollen taxa
+  pollentaxa <- pol %>% pull(pollentaxon) %>% unique()
+  
+  ## Model data (capitalized)
+  Trait <- trait %>% 
+    filter(pollentaxon %in% pollentaxa) %>% 
+    pull(selectedtrait) 
+  
+  Tax <- trait %>% 
+    filter(pollentaxon %in% pollentaxa) %>% 
+    pull(pollentaxon) %>% 
+    as.factor() 
+  
+  N <- length(Trait)
+  
+  Ab <- pol %>%
+    # this filters taxa with too little trait data
+    filter(pollentaxon %in% unique(Tax)) %>% 
+    # calculate percentage after removing taxa
+    group_by(sitename, pollentaxon) %>% 
+    summarise(abun = sum(pollen_abun)) %>% 
+    mutate(abun = abun/sum(abun)) %>% 
+    # convert to wide format
+    pivot_wider(names_from = pollentaxon, values_from = abun) %>% 
+    # filter empty columns (taxon not in that country)
+    discard(~all(is.na(.))) %>% 
+    # replace remaining nas by 0
+    replace(is.na(.), 0) %>% 
+    # sort alphabetically
+    ungroup()
+  
+  # save site names with data
+  sitenames <- Ab %>% pull(sitename)
+  Ab <- Ab %>% 
+    dplyr::select(-sitename, sort(colnames(.[-1]))) %>% 
+    as.matrix() 
+  
+  Ntax <- ncol(Ab)
+  Nsites <- nrow(Ab) 
+  
+  # for setting priors taxon level
+  MeanLog <- aggregate(Trait, list(Tax), FUN = mean)[,"x"] %>% log()
+  SDLog <- aggregate(Trait, list(Tax), FUN = sd)[,"x"] %>%
+    log() %>% 
+    na_if(., 0) # prior cant take 0 or negative
+  SDLog[SDLog < 0] <- NA  
+  SDLog <- replace_na(SDLog, mean(SDLog, na.rm = TRUE))  # in case of only 1 obs set sd to mean sd
+  
+  # initial values
+  mean.tax.log <- list(chain1 = MeanLog*0.01, chain2 = MeanLog*100)
+  sd.tax.log <- list(chain1 = SDLog*0.01, chain2 = SDLog*100)
+  cwm <- list(chain1 = rep(min(log(Trait)), Nsites), 
+              chain2 = rep(max(log(Trait)), Nsites))
+  # run model
+  results <- run.jags("CWM_log_prior_data.txt", n.chains = 2)
+  
+  # summarize results
+  res <- data.frame(summary(results, vars = "cwm"),
+                    sitename = sitenames,
+                    trait = selectedtrait,
+                    country = selectedcountry,
+                    correction = selectedabun)
+  saveRDS(res, paste0("RDS_files/03_CWM_estimates_pollen_", selectedcountry,"_",
+                      selectedtrait, "_", selectedabun,"_field.rds"))
+  
+  if (taxtrait) {
+    res_tax <- as.data.frame(summary(results, vars = c("mean.tax.log", "sd.tax.log"))) %>%
+      # filter taxon trait estimates
+      rownames_to_column("parameter") %>%
+      dplyr::select(parameter, Mean) %>%
+      mutate(parameter = str_extract(parameter, pattern = "mean.tax|sd.tax"),
+             tax = rep(as.character(unique(Tax)), 2)) %>% 
+      pivot_wider(names_from = parameter, values_from = Mean) 
+    
+    saveRDS(res_tax, paste0("RDS_files/03_taxon_trait_estimates_",selectedcountry,"_",
+                            selectedabun, "_", selectedtrait, "_field.rds"))
+  }
 }

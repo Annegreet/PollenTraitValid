@@ -44,7 +44,8 @@ pollen_files <- list.files("RDS_files/") %>%
   str_subset(pattern = "03_zCWM_estimates_") %>% 
   str_subset(paste(traits, collapse = "|")) %>% 
   str_subset(pattern = "pollen") %>% 
-  str_subset(pattern = "notinpollen", negate = TRUE) 
+  str_subset(pattern = "notinpollen", negate = TRUE) %>% 
+  str_subset(pattern = "field", negate = TRUE)
 
 pollen_lab <- pollen_files %>% 
   str_subset(paste(traits, collapse = "|")) %>% 
@@ -221,8 +222,6 @@ cwm <- dfCWM_pol %>%
          pollination == "allpol",
          correction == "no correction") %>% 
   left_join(dfCWM_veg, by = c("country", "sitename", "trait", "growthform", "pollination")) %>% 
-  # plant height in zone B has bimodal distribution, remove from dataset
-  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
   filter(taxres == "stand.spec") %>% 
   filter(notinpollen == "inpollen")
 
@@ -240,8 +239,6 @@ cwm2 <- dfCWM_pol %>%
          pollination == "allpol",
          correction == "correction") %>% 
   left_join(dfCWM_veg, by = c("country","sitename", "trait", "growthform", "pollination")) %>% 
-  # plant height in zone B has bimodal distribution, remove from dataset
-  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
   filter(taxres == "stand.spec") %>% 
   filter(notinpollen == "inpollen")
 
@@ -259,8 +256,6 @@ cwm3 <- dfCWM_pol %>%
          pollination == "allpol",
          correction == "helinger correction") %>% 
   left_join(dfCWM_veg, by = c("country","sitename", "trait", "growthform", "pollination")) %>% 
-  # plant height in zone B has bimodal distribution, remove from dataset
-  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
   filter(taxres == "stand.spec") %>% 
   filter(notinpollen == "inpollen")
 
@@ -278,8 +273,6 @@ slopes3 <- purrr::map2_dfr(combo$zone, combo$trait,
 nobs <- cwm2 %>% 
   bind_rows(cwm) %>% 
   bind_rows(cwm3) %>% 
-  # plant height in zone B has bimodal distribution, remove from dataset
-  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
   group_by(trait, zone, correction) %>% 
   summarise(label = n(), .groups = "keep") %>% 
   left_join(slopes3[slopes3$parameter == "slope", ], by = c("trait",  "zone", "correction" = "treatment")) %>% 
@@ -406,8 +399,6 @@ cwm_gen <- dfCWM_pol %>%
          pollination == "allpol",
          correction == "no correction") %>% 
   left_join(dfCWM_veg, by = c("country", "sitename", "trait", "growthform", "pollination")) %>% 
-  # plant height in zone B has bimodal distribution, remove from dataset
-  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
   filter(taxres == "genus") 
 
 combo <- cwm_gen %>% 
@@ -423,8 +414,6 @@ cwm_fam <- dfCWM_pol %>%
          pollination == "allpol",
          correction == "no correction") %>% 
   left_join(dfCWM_veg, by = c("country","sitename", "trait", "growthform", "pollination")) %>% 
-  # plant height in zone B has bimodal distribution, remove from dataset
-  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
   filter(taxres == "family") 
 
 slopes_taxres <- purrr::map2_dfr(combo$zone, combo$trait, 
@@ -439,8 +428,6 @@ nobs_taxres <- cwm_fam %>%
   bind_rows(cwm_sp) %>%
   group_by(trait, zone, taxres) %>%
   summarise(label = n(), .groups = "keep") %>%
-  # plant height in zone B has bimodal distribution, remove from dataset
-  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
   left_join(slopes_taxres[slopes_taxres$parameter == "slope", ], by = c("trait",  "zone", "taxres" = "treatment")) %>%
   dplyr::select(label,  zone, trait, Mean, treatment = "taxres") %>%
   ungroup() %>%
@@ -516,8 +503,6 @@ cwm_draw <- dfCWM_pol %>%
          pollination == "allpol",
          str_detect(correction, pattern = "draw")) %>%
   left_join(dfCWM_veg, by = c("country","sitename", "trait", "growthform", "pollination")) %>% 
-  # plant height in zone B has bimodal distribution, remove from dataset
-  filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
   filter(taxres == "stand.spec")
 
 combo <- expand_grid(zone = unique(cwm_draw$zone), correction = unique(cwm_draw$correction))
@@ -543,8 +528,6 @@ slopes_draw <- slopes_LA %>%
     slopes_draw %>% 
     # make sure the order of zones is right
     mutate(zone = fct_relevel(zone, "zoneC", "zoneB","zoneA")) %>% 
-    # plant height in zone B has bimodal distribution, remove from dataset
-    filter(!(trait == "PlantHeight" & zone == "zoneB")) %>% 
     ggplot(aes(x = zone, y = Mean)) + 
     # geoms
     geom_hline(yintercept = 0, linetype = "dashed") +

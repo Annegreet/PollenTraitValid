@@ -31,6 +31,7 @@ if (!require(rlang)) install.packages("rlang")
 ## Load data
 bdm_meta <- read.csv("Data/bdm_metadata.csv") %>% 
   mutate(sitename = as.character(aID_STAO))
+
 # collate data
 traits <- c("LA","SLA","PlantHeight")
 
@@ -60,7 +61,8 @@ folderpath.fun <- function(x)
 dfCWM_pol <- pollen_files %>% 
   folderpath.fun(.) %>% 
   purrr::map2(pollen_lab, ~readRDS(.) %>% 
-                mutate(label = .y)) %>% 
+                mutate(label = .y) %>% 
+                rownames_to_column("rowname")) %>% 
   bind_rows() %>% 
   as_tibble() %>% 
   mutate(correction = case_when(str_detect(label, pattern = "adjustedpercent_draw") ~ str_extract(label, pattern = "draw[0-9]*$"),
@@ -70,11 +72,13 @@ dfCWM_pol <- pollen_files %>%
          sitename = str_remove(sitename, "X"),
          pollination = replace_na(pollination, "allpol"),
          growthform = replace_na(growthform, "allpft"),
-         standardized = ifelse(str_detect(label, "zCWM"),"yes","no")
+         standardized = ifelse(str_detect(label, "zCWM"),"yes",ifelse(str_detect(rowname, "zcwm"),"yes","no")),
+         sp_list = ifelse(str_detect(label, "field"), "field", "GBIF")
   ) %>% 
   dplyr::select(country, sitename, cwm_mean = Mean, 
-                cwm_sd = SD, trait, correction,  standardized, growthform) %>% 
+                cwm_sd = SD, trait, correction,  standardized, growthform, pollination, sp_list) %>% 
   left_join(bdm_meta, by = "sitename")
+sitenames <- dfCWM_pol %>% pull(sitename) %>% unique
 
 dfCWM_veg <- veg_files %>% 
   folderpath.fun(.) %>% 
@@ -87,31 +91,26 @@ dfCWM_veg <- veg_files %>%
   mutate(country = str_extract(label, pattern = "Scotland|Switzerland"),
          standardized = ifelse(str_detect(label, "zCWM"), "yes", "no")) %>% 
   dplyr::select(country, sitename, trait, cwm_mean = Mean, cwm_sd = SD,
-                zone, standardized, growthform) %>% 
+                zone, standardized, growthform, pollination) %>% 
   # create treatment column
   mutate(zone = str_remove(zone, pattern = "Scotland |Switzerland ")) %>% 
-  left_join(bdm_meta, by = "sitename")
+  left_join(bdm_meta, by = "sitename")  %>% 
+  # select sites in the pollen dataset
+  filter(sitename %in% sitenames)
 
-sum_pft <- readRDS("RDS_files/01_Percentage_cover_pft.rds") %>% 
-  replace_na(list(`Non-Woody` = 0,
-                  Woody = 0,
-                  `not wind` = 0,
-                  wind = 0)) 
 # saveRDS(dfCWM_pol, "RDS_files/04_zCWM_estimates_pollen_Switzerland.rds")
 # saveRDS(dfCWM_veg, "RDS_files/04_zCWM_estimates_vegetation_Switzerland.rds")
 
 selectedtrait <- "PlantHeight"
 
 # Linear model ----
-lm_bay <- function(cwm, selectedhabitat,  selectedpft, selectedtrait, selecteddata){
-  cwm <- cwm %>% 
+lm_bay <- function(cwm, selectedhabitat,  selectedpft, selectedpol, selectedtrait, selecteddata){
+  cwm <- dfCWM_veg %>% 
     filter(habitat01 %in% selectedhabitat) %>% 
     filter(growthform == selectedpft) %>% 
-    filter(trait == selectedtrait) %>% 
-    left_join(sum_pft, by = c("sitename")) %>% 
-    filter((growthform == "allpft") |
-                    (growthform == "trsh" & Woody >= 5) |
-                    (growthform == "herb" & `Non-Woody` >= 5)) 
+    filter(pollination == selectedpol) %>% 
+    filter(trait == selectedtrait) 
+  
   # Model data
   CWM <- cwm %>% 
     filter(standardized == "no") %>% 
@@ -192,7 +191,7 @@ lm_bay <- function(cwm, selectedhabitat,  selectedpft, selectedtrait, selectedda
   residuals <- resid(results)
   fitted <- fitted(results)
   png(paste0("Figures/CWM_elevation_model_check_", selectedtrait,"_", selecteddata,"_", paste(selectedhabitat, collapse = "_"),
-             "_",selectedpft, ".png"))
+             "_",selectedpft,"_",selectedpol, ".png"))
   par(mfrow = c(2,1))
   # Plot of residuals indicates a potential problem:
   qqnorm(residuals); qqline(residuals)
@@ -203,7 +202,7 @@ lm_bay <- function(cwm, selectedhabitat,  selectedpft, selectedtrait, selectedda
   # save convergence diagnostics
   plot(results, vars = c("zintercept", "zslope_elevation", "zsd", "df"), 
        file = paste0("Convergence_diagnostics/04_Covergence_lm_", selectedtrait,
-                              "_", selecteddata,"_",paste(selectedhabitat, collapse = "_"),"_",selectedpft, ".pdf" ))
+                              "_", selecteddata,"_",paste(selectedhabitat, collapse = "_"),"_",selectedpft,"_",selectedpol, ".pdf" ))
 
   # plot model results
   lm_mcmc <- as.mcmc(results)
@@ -222,6 +221,7 @@ lm_bay <- function(cwm, selectedhabitat,  selectedpft, selectedtrait, selectedda
   df_pred <- tibble(elevation = Elev_pred,
                     habitat01 = paste(selectedhabitat, collapse = "_"),
                     growthform = selectedpft,
+                    pollination = selectedpol,
                     data = selecteddata,
                     cwm_mean = pred_cwm_mean,
                     credible_lower = credible_lower,
@@ -230,74 +230,188 @@ lm_bay <- function(cwm, selectedhabitat,  selectedpft, selectedtrait, selectedda
                     uncertainty_upper = uncertainty_upper,
                     trait = selectedtrait)
   saveRDS(df_pred, paste0("RDS_files/05_lm_switzerland_", selectedtrait, "_", selecteddata,"_",paste(selectedhabitat, collapse = "_"),
-                          "_",selectedpft,".rds"))
+                          "_",selectedpft,"_",selectedpol,".rds"))
 
   }
 
-
-
 traits <- c("PlantHeight", "LA", "SLA")
 ## vegetation 
-# all taxa
 cwm_veg <- dfCWM_veg %>% 
   filter(growthform == "allpft")
-# purrr::map(traits, ~lm_bay(cwm = cwm_veg, 
-#                            selectedtrait = .x, 
-#                            selectedhabitat = "forests", 
-#                            selectedpft = "allpft",
-#                            selecteddata = "Vegetation"))
-# purrr::map(traits, ~lm_bay(cwm = cwm_veg, 
-#                            selectedtrait = .x, 
-#                            selectedhabitat = "grasslands",
-#                            selectedpft = "allpft",
-#                            selecteddata = "Vegetation"))
+purrr::map(traits, ~lm_bay(cwm = cwm_veg,
+                           selectedtrait = .x,
+                           selectedhabitat = "forests",
+                           selectedpft = "allpft",
+                           selectedpol = "allpol",
+                           selecteddata = "Vegetation"))
+purrr::map(traits, ~lm_bay(cwm = cwm_veg,
+                           selectedtrait = .x,
+                           selectedhabitat = "grasslands",
+                           selectedpft = "allpft",
+                           selectedpol = "allpol",
+                           selecteddata = "Vegetation"))
+purrr::map(traits, ~lm_bay(cwm = cwm_veg,
+                           selectedtrait = .x,
+                           selectedhabitat = c("forests","grasslands"),
+                           selectedpft = "allpft",
+                           selectedpol = "allpol",
+                           selecteddata = "Vegetation"))
 # herb
 purrr::map(traits, ~lm_bay(cwm = dfCWM_veg, 
                            selectedtrait = .x, 
                            selectedhabitat = c("forests","grasslands"), 
                            selectedpft = "herb",
+                           selectedpol = "allpol",
                            selecteddata = "Vegetation"))
 # trsh
 purrr::map(traits, ~lm_bay(cwm = dfCWM_veg, 
                            selectedtrait = .x, 
                            selectedhabitat = c("forests","grasslands"), 
                            selectedpft = "trsh",
+                           selectedpol = "allpol",
+                           selecteddata = "Vegetation"))
+# not wind pollinated
+purrr::map(traits, ~lm_bay(cwm = dfCWM_veg, 
+                           selectedtrait = .x, 
+                           selectedhabitat = c("forests","grasslands"), 
+                           selectedpft = "allpft",
+                           selectedpol = "no wind",
+                           selecteddata = "Vegetation"))
+# wind pollinated
+purrr::map(traits, ~lm_bay(cwm = dfCWM_veg, 
+                           selectedtrait = .x, 
+                           selectedhabitat = c("forests","grasslands"), 
+                           selectedpft = "allpft",
+                           selectedpol = "wind",
+                           selecteddata = "Vegetation"))
+# No subset
+purrr::map(traits, ~lm_bay(cwm = dfCWM_veg,
+                           selectedtrait = .x,
+                           selectedhabitat = c("forests","grasslands"),
+                           selectedpft = "allpft",
+                           selectedpol = "allpol",
                            selecteddata = "Vegetation"))
 
 ## pollen
 cwm_pol <- dfCWM_pol %>% 
   drop_na(elevation) %>% 
-  filter(correction == "no correction") 
-# purrr::map(traits, ~lm_bay(cwm = cwm_pol, 
-#                            selectedtrait = .x, 
-#                            selectedpft = "allpft",
-#                            selectedhabitat = "forests", 
-#                            selecteddata = "Pollen"))
-# purrr::map(traits, ~lm_bay(cwm = cwm_pol, 
-#                            selectedtrait = .x, 
-#                            selectedpft = "allpft",
-#                            selectedhabitat = "grasslands", 
-#                            selecteddata = "Pollen"))
+  filter(correction == "no correction") %>% 
+  filter(sp_list == "GBIF")
+# habitat
+purrr::map(traits, ~lm_bay(cwm = cwm_pol,
+                           selectedtrait = .x,
+                           selectedhabitat = "forests",
+                           selectedpft = "allpft",
+                           selectedpol = "allpol",
+                           selecteddata = "Pollen"))
+purrr::map(traits, ~lm_bay(cwm = cwm_pol,
+                           selectedtrait = .x,
+                           selectedhabitat = "grasslands",
+                           selectedpft = "allpft",
+                           selectedpol = "allpol",
+                           selecteddata = "Pollen"))
+# PFT
 purrr::map(traits, ~lm_bay(cwm = cwm_pol, 
                            selectedtrait = .x, 
                            selectedpft = "herb",
+                           selectedpol = "allpol",
                            selectedhabitat = c("forests", "grasslands"), 
                            selecteddata = "Pollen"))
 purrr::map(traits, ~lm_bay(cwm = cwm_pol, 
                            selectedtrait = .x, 
                            selectedpft = "trsh",
+                           selectedpol = "allpol",
                            selectedhabitat = c("forests", "grasslands"), 
                            selecteddata = "Pollen"))
+# pollination mode
+purrr::map(traits, ~lm_bay(cwm = cwm_pol, 
+                           selectedtrait = .x, 
+                           selectedpft = "allpft",
+                           selectedpol = "wind",
+                           selectedhabitat = c("forests", "grasslands"), 
+                           selecteddata = "Pollen"))
+purrr::map(traits, ~lm_bay(cwm = cwm_pol, 
+                           selectedtrait = .x, 
+                           selectedpft = "allpft",
+                           selectedpol = "not wind",
+                           selectedhabitat = c("forests", "grasslands"), 
+                           selecteddata = "Pollen"))
+# No subset
+purrr::map(traits, ~lm_bay(cwm = cwm_pol, 
+                           selectedtrait = .x, 
+                           selectedpft = "allpft",
+                           selectedpol = "allpol",
+                           selectedhabitat = c("forests", "grasslands"), 
+                           selecteddata = "Pollen"))
+
+# CWM with sp list based on field observations
+cwm_pol_field <- dfCWM_pol %>%
+  drop_na(elevation) %>% 
+  filter(correction == "no correction") %>% 
+  filter(sp_list == "field")
+purrr::map(traits, ~lm_bay(cwm = cwm_pol_field,
+                           selectedtrait = .x,
+                           selectedpft = "allpft",
+                           selectedpol = "allpol",
+                           selectedhabitat = c("forests", "grasslands"),
+                           selecteddata = "Pollen_fieldsp"))
+# corrected
+cwm_pol_correction <- dfCWM_pol %>%
+  drop_na(elevation) %>% 
+  filter(correction == "correction") 
+purrr::map(traits, ~lm_bay(cwm = cwm_pol_correction,
+                           selectedtrait = .x,
+                           selectedpft = "allpft",
+                           selectedpol = "allpol",
+                           selectedhabitat = c("forests", "grasslands"),
+                           selecteddata = "Pollen_correction"))
+purrr::map(traits, ~lm_bay(cwm = cwm_pol_correction,
+                           selectedtrait = .x,
+                           selectedpft = "allpft",
+                           selectedpol = "allpol",
+                           selectedhabitat = c("forests"),
+                           selecteddata = "Pollen_correction"))
+purrr::map(traits, ~lm_bay(cwm = cwm_pol_correction,
+                           selectedtrait = .x,
+                           selectedpft = "allpft",
+                           selectedpol = "allpol",
+                           selectedhabitat = "grasslands",
+                           selecteddata = "Pollen_correction"))
+purrr::map(traits, ~lm_bay(cwm = cwm_pol_correction,
+                           selectedtrait = .x,
+                           selectedpft = "trsh",
+                           selectedpol = "allpol",
+                           selectedhabitat = c("forests", "grasslands"),
+                           selecteddata = "Pollen_correction"))
+purrr::map(traits, ~lm_bay(cwm = cwm_pol_correction,
+                           selectedtrait = .x,
+                           selectedpft = "herb",
+                           selectedpol = "allpol",
+                           selectedhabitat = c("forests", "grasslands"),
+                           selecteddata = "Pollen_correction"))
+purrr::map(traits, ~lm_bay(cwm = cwm_pol_correction,
+                           selectedtrait = .x,
+                           selectedpft = "allpft",
+                           selectedpol = "wind",
+                           selectedhabitat = c("forests", "grasslands"),
+                           selecteddata = "Pollen_correction"))
+purrr::map(traits, ~lm_bay(cwm = cwm_pol_correction,
+                           selectedtrait = .x,
+                           selectedpft = "allpft",
+                           selectedpol = "not wind",
+                           selectedhabitat = c("forests", "grasslands"),
+                           selecteddata = "Pollen_correction"))
 
 
 # Plotting ----
 # load in lm results
 lm_files <- list.files("RDS_files/") %>% 
-  str_subset(pattern = "05_lm")
+  str_subset(pattern = "05_lm") 
 
 lm_values <- lm_files %>% 
   folderpath.fun(.) %>% 
-  purrr::map_df(~readRDS(.)) 
+  purrr::map2_df(.,lm_files, ~readRDS(.) %>% 
+                   mutate(f = .y)) 
 
 # plot model results
 cwm_range <- lm_values %>% 
@@ -307,79 +421,30 @@ cwm_range <- lm_values %>%
             min_lim = min(uncertainty_lower, na.rm = T)) %>%
   pivot_longer(-trait, names_to = "limits", values_to = "cwm_mean") %>%
   mutate(elevation = rep(c(400,2600,400,2600)), habitat01 = NA, growthform = NA) 
- 
 labs_trait <- as_labeller(c(PlantHeight = "Height~(cm)(log)",
                             LA = "Leaf~area~(cm^{2})(log)",
                             SLA ="SLA~(mm^{2}/mg)(log)"),
                           default = label_parsed)
 
+cwm_points_veg <- dfCWM_veg[dfCWM_veg$standardized == "no" & dfCWM_veg$growthform %in% c("trsh","herb"),] %>% 
+  select(elevation, growthform,trait, cwm_mean) %>% 
+  mutate(data = "Vegetation")
+cwm_points <- cwm_pol[cwm_pol$standardized == "no" & cwm_pol$growthform %in% c("trsh","herb"),] %>% 
+  select(elevation, growthform, trait, cwm_mean) %>% 
+  mutate(data = "Pollen") %>% 
+  bind_rows(cwm_points_veg) %>% 
+  mutate(data =  factor(data, levels = c("Vegetation","Pollen", "Pollen_corrected"))) 
 (p <- lm_values %>% 
-    filter(data == "Vegetation" ) %>% 
-    filter(is.na(growthform)|growthform == "allpft") %>% 
-    ggplot(aes(x = elevation, y = cwm_mean, colour = habitat01)) +
-    geom_ribbon(aes(ymin = uncertainty_lower, ymax = uncertainty_upper, fill = habitat01), 
-                alpha = 0.2, colour = NA) +
-    geom_ribbon(aes(ymin = credible_lower, ymax = credible_upper, fill = habitat01), 
-                alpha = 0.2, colour = NA) +
-    geom_line() +
-    geom_point(data = cwm_veg[cwm_veg$standardized == "no",], aes(x = elevation, y = cwm_mean), size = 0.75) +
-    geom_blank(data = cwm_range) +
-    scale_color_manual(values = c(forests = "darkorange", grasslands = "purple"),
-                       label = c(forests = "Forests", grasslands = "Grassland")) + 
-    scale_fill_manual(values = c(forests = "darkorange", grasslands = "purple"),
-                       label = c(forests = "Forest", grasslands = "Grassland")) + 
-    scale_y_continuous("") + 
-    scale_x_continuous("Elevation (m.s.l)", limits = c(400,2600)) +
-    facet_wrap(~trait, scales = "free",
-               labeller = labs_trait
-               ) + 
-    theme_bw() +
-    theme(legend.position =  "bottom",
-          strip.background = element_blank(),
-          strip.placement = "outside",
-          legend.title = element_blank()) +
-   guides(fill = "none"))
-ggsave("Figures/CWM_elevation_vegetaion.png", p, width = 7, height = 4)
-
-(p <- lm_values %>% 
-    filter(data == "Pollen" ) %>% 
-    filter(is.na(growthform)|growthform == "allpft") %>% 
-    ggplot(aes(x = elevation, y = cwm_mean, colour = habitat01)) +
-    geom_ribbon(aes(ymin = uncertainty_lower, ymax = uncertainty_upper, fill = habitat01), 
-                alpha = 0.2, colour = NA) +
-    geom_ribbon(aes(ymin = credible_lower, ymax = credible_upper, fill = habitat01), 
-                alpha = 0.2, colour = NA) +
-    geom_line() +
-    geom_point(data = cwm_pol[cwm_pol$standardized == "no",], aes(x = elevation, y = cwm_mean), size = 0.75) +
-    geom_blank(data = cwm_range) +
-    scale_color_manual(values = c(forests = "darkorange", grasslands = "purple"),
-                       label = c(forests = "Forests", grasslands = "Grassland")) + 
-    scale_fill_manual(values = c(forests = "darkorange", grasslands = "purple"),
-                      label = c(forests = "Forest", grasslands = "Grassland")) + 
-    scale_y_continuous("") + 
-    scale_x_continuous("Elevation (m.s.l)", limits = c(400,2600)) +
-    facet_wrap(~trait, scales = "free",
-               labeller = labs_trait) + 
-    theme_bw() +
-    theme(legend.position =  "bottom",
-          strip.background = element_blank(),
-          strip.placement = "outside",
-          legend.title = element_blank()) +
-    guides(fill = "none"))
-ggsave("Figures/CWM_elevation_pollen.png", p, width = 7, height = 4)
-
-
-(p <- lm_values %>% 
-    filter(data == "Vegetation" ) %>% 
-    filter(growthform %in% c("herb", "trsh")) %>% 
+    filter(habitat01 == "forests_grasslands") %>% 
+    filter(growthform == "herb"| growthform == "trsh") %>%
+    mutate(data =  factor(data, levels = c("Vegetation","Pollen", "Pollen_corrected"))) %>% 
     ggplot(aes(x = elevation, y = cwm_mean, colour = growthform)) +
     geom_ribbon(aes(ymin = uncertainty_lower, ymax = uncertainty_upper, fill = growthform), 
                 alpha = 0.2, colour = NA) +
     geom_ribbon(aes(ymin = credible_lower, ymax = credible_upper, fill = growthform), 
                 alpha = 0.2, colour = NA) +
     geom_line() +
-    geom_point(data = dfCWM_veg[dfCWM_veg$standardized == "no" & 
-                                  dfCWM_veg$growthform %in% c("trsh","herb"),], 
+    geom_point(data = cwm_points,
                aes(x = elevation, y = cwm_mean), size = 0.75) +
     geom_blank(data = cwm_range) +
     scale_color_manual(values = c(trsh = "darkorange", herb = "purple"),
@@ -388,9 +453,37 @@ ggsave("Figures/CWM_elevation_pollen.png", p, width = 7, height = 4)
                       label = c(trsh = "Woody", herb = "Non-woody")) + 
     scale_y_continuous("") + 
     scale_x_continuous("Elevation (m.s.l)", limits = c(400,2600)) +
-    facet_wrap(~trait, scales = "free",
-               labeller = labs_trait
-    ) + 
+    facet_grid(trait~data, scales = "free",
+               labeller = labeller(trait = labs_trait)) + 
+    theme_bw() +
+    theme(legend.position =  "bottom",
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          legend.title = element_blank()) +
+    guides(fill = "none"))
+ggsave("Figures/CWM_elevation_veg_pol.png", height = 7, width = 7)
+(p <- lm_values %>% 
+    filter(data == "Vegetation"|data == "Pollen") %>% 
+    filter(!habitat01 == "forests_grasslands") %>% 
+    filter(growthform %in% c("herb", "trsh")) %>% 
+    ggplot(aes(x = elevation, y = cwm_mean, colour = growthform)) +
+    geom_ribbon(aes(ymin = uncertainty_lower, ymax = uncertainty_upper, fill = growthform), 
+                alpha = 0.2, colour = NA) +
+    geom_ribbon(aes(ymin = credible_lower, ymax = credible_upper, fill = growthform), 
+                alpha = 0.2, colour = NA) +
+    geom_line() +
+    # geom_point(data = dfCWM_veg[dfCWM_veg$standardized == "no" & 
+    #                               dfCWM_veg$growthform %in% c("trsh","herb"),], 
+    #            aes(x = elevation, y = cwm_mean), size = 0.75) +
+    geom_blank(data = cwm_range) +
+    scale_color_manual(values = c(trsh = "darkorange", herb = "purple"),
+                       label = c(trsh = "Woody", herb = "Non-woody")) + 
+    scale_fill_manual(values = c(trsh = "darkorange", herb = "purple"),
+                      label = c(trsh = "Woody", herb = "Non-woody")) + 
+    scale_y_continuous("") + 
+    scale_x_continuous("Elevation (m.s.l)", limits = c(400,2600)) +
+    facet_grid(trait~data, scales = "free",
+               labeller = labeller(trait = labs_trait)) + 
     theme_bw() +
     theme(legend.position =  "bottom",
           strip.background = element_blank(),
@@ -418,7 +511,7 @@ ggsave("Figures/CWM_elevation_vegetation_pft.png", p, width = 7, height = 4)
                       label = c(trsh = "Woody", herb = "Non-woody")) + 
     scale_y_continuous("") + 
     scale_x_continuous("Elevation (m.s.l)", limits = c(400,2600)) +
-    facet_wrap(~trait, scales = "free",
+    facet_wrap(data~trait, scales = "free",
                labeller = labs_trait
     ) + 
     theme_bw() +
@@ -428,3 +521,33 @@ ggsave("Figures/CWM_elevation_vegetation_pft.png", p, width = 7, height = 4)
           legend.title = element_blank()) +
     guides(fill = "none"))
 ggsave("Figures/CWM_elevation_pollen_pft.png", p, width = 7, height = 4)
+
+# By habitat 
+(p <- lm_values %>% 
+    # filter(habitat01 %in% c("forests", "grasslands")) %>% 
+    filter(data  %in% c("Pollen", "Vegetation", "Pollen_correction")) %>% 
+    filter(pollination == "allpol", growthform == "allpft") %>% 
+    ggplot(aes(x = elevation, y = cwm_mean, colour = habitat01)) +
+    geom_ribbon(aes(ymin = uncertainty_lower, ymax = uncertainty_upper, fill = habitat01), 
+                alpha = 0.2, colour = NA) +
+    geom_ribbon(aes(ymin = credible_lower, ymax = credible_upper, fill = habitat01), 
+                alpha = 0.2, colour = NA) +
+    geom_line() +
+    geom_blank(data = cwm_range) +
+    # scale_color_manual(values = c(forests = "darkorange", grasslands = "purple"),
+    #                    label = c(forests = "Forests", grasslands = "Grassland")) + 
+    # scale_fill_manual(values = c(forests = "darkorange", grasslands = "purple"),
+    #                   label = c(forests = "Forest", grasslands = "Grassland")) + 
+    scale_y_continuous("") + 
+    scale_x_continuous("Elevation (m.s.l)", limits = c(400,2600)) +
+    facet_grid(trait~data, scales = "free"
+               # labeller = labs_trait
+               ) + 
+    theme_bw() +
+    theme(legend.position =  "bottom",
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          legend.title = element_blank()) +
+    guides(fill = "none"))
+ggsave("Figures/CWM_elevation_pollen_fieldsp.png", p, width = 7, height = 4)
+
